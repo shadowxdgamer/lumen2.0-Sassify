@@ -75,17 +75,30 @@ input[type="range"].hud-range::-moz-range-thumb {
   clip-path: polygon(6% 0, 94% 0, 100% 18%, 100% 82%, 94% 100%, 6% 100%, 0 82%, 0 18%);
   background: radial-gradient(120% 140% at 50% 50%, #0ea5e9 0%, #0369a1 45%, #082f49 100%);
   box-shadow: inset 0 0 22px rgba(125, 249, 255, 0.65), inset 0 0 2px #a5f3fc;
-  transition: filter 0.2s, transform 0.1s;
+  transition-property: filter, scale;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+  -webkit-tap-highlight-color: transparent;
 }
-.engage-btn:hover {
-  filter: brightness(1.18) saturate(1.1);
-}
-.engage-btn:active {
-  transform: scale(0.985);
+@media (hover: hover) {
+  .engage-btn:hover {
+    filter: brightness(1.18) saturate(1.1);
+  }
 }
 .engage-wrap {
   filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.75)) drop-shadow(0 0 26px rgba(14, 165, 233, 0.45));
-  animation: engage-pulse 2.2s ease-in-out infinite;
+}
+/* Motion only for users who have not asked to reduce it; colour cues remain either way. */
+@media (prefers-reduced-motion: no-preference) {
+  .engage-btn:not(:disabled):active {
+    scale: 0.96;
+  }
+  .engage-wrap {
+    animation: engage-pulse 2.2s ease-in-out infinite;
+  }
+  .blink {
+    animation: blink 0.9s steps(2, start) infinite;
+  }
 }
 @keyframes engage-pulse {
   0%,
@@ -101,9 +114,6 @@ input[type="range"].hud-range::-moz-range-thumb {
   50% {
     opacity: 0.25;
   }
-}
-.blink {
-  animation: blink 0.9s steps(2, start) infinite;
 }
 
 /* ---------- 3D floating HUD callouts (CSS2DRenderer) ---------- */

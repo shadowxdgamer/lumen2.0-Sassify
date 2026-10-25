@@ -27,8 +27,6 @@ export class DustSystem {
   private spawnAcc = 0;
   private nextArc = 0;
   private rng = 12345;
-  /** Count of deflections in the last second (for HUD). */
-  deflections = 0;
 
   constructor() {
     this.pos.fill(HIDDEN);
@@ -139,7 +137,6 @@ export class DustSystem {
         this.vel[o + 2] = (this.vel[o + 2] - 2 * vn * tmp.z) * 0.55;
         const hit = tmp.clone().multiplyScalar(NET_RADIUS + 0.05).add(center);
         this.pos.set([hit.x, hit.y, hit.z], o);
-        this.deflections++;
         if (this.rand() < 0.5) this.spawnArc(hit, center);
         continue;
       }

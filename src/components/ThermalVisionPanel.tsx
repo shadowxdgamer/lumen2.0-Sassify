@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Detection } from '../simulation/physicsEngine';
 import { engine, getSnapshot, subscribe } from '../simulation/store';
-import { HOT_G, HOT_R, detectAnomaly } from '../vision/anomalyDetector';
+import { detectAnomaly } from '../vision/anomalyDetector';
 import { LUT, T_MAX, T_MIN, tempToIndex } from '../vision/ironbow';
 import { THERMAL_H, THERMAL_W, renderThermalFrame } from '../vision/thermalRenderer';
 import { Panel } from './Panel';
@@ -49,8 +49,7 @@ function drawOverlay(ctx: CanvasRenderingContext2D, det: Detection | null, maxT:
   // Footer telemetry.
   ctx.fillStyle = 'rgba(255,255,255,0.75)';
   ctx.font = `${8 * K * 0.95}px ui-monospace, Consolas, monospace`;
-  ctx.fillText(`FRM ${frame.toString().padStart(5, '0')} · CV ${cvMs.toFixed(1)}ms`, 6 * K, 152 * K);
-  ctx.fillText(det ? `CC ${det.pixels}px · ${(det.areaRatio * 100).toFixed(2)}% · C(${det.centroid[0]},${det.centroid[1]})` : 'CC — NO PIXELS > THRESHOLD', 6 * K, 161 * K);
+  ctx.fillText(det ? `LOCKED · WING ${det.wing} · ${det.pixels} px · ${cvMs.toFixed(1)} ms` : `SCANNING · FRAME ${frame} · ${cvMs.toFixed(1)} ms`, 6 * K, 160 * K);
 
   if (!det) return;
   const [x0, y0, x1, y1] = det.bbox;
@@ -114,7 +113,6 @@ function drawOverlay(ctx: CanvasRenderingContext2D, det: Detection | null, maxT:
 export function ThermalVisionPanel() {
   const cvs = useRef<HTMLCanvasElement>(null);
   const hud = useRef<HTMLCanvasElement>(null);
-  const [info, setInfo] = useState<{ det: Detection | null; ms: number; eds: string }>({ det: null, ms: 0, eds: 'STANDBY' });
 
   useEffect(() => {
     const ctx = cvs.current?.getContext('2d', { willReadFrequently: true });
@@ -141,31 +139,16 @@ export function ThermalVisionPanel() {
       let maxT = 0;
       for (let i = 0; i < 4; i++) maxT = Math.max(maxT, s.wingTemps[i]);
       drawOverlay(octx, det, Math.max(maxT, s.coreTemp * 0.72), frame, ms);
-      const eds = s.edsActive ? `FIRING · WING ${s.edsWing} · D ${(s.dust[s.edsWing] * 100).toFixed(0)}%` : s.edsArmed ? 'ARMED · AWAITING LOCK' : 'STANDBY';
-      setInfo({ det, ms, eds });
     };
     run();
     return subscribe(run);
   }, []);
 
-  const det = info.det;
   return (
-    <Panel title="INFRARED THERMAL AI VISION" className="shrink-0" right={<span className="font-mono text-[10px] text-slate-500">260×170 · 10 Hz</span>}>
-      <div className="relative mx-[8px] mt-[6px] h-[196px] overflow-hidden border border-edge bg-black">
+    <Panel title="INFRARED THERMAL AI VISION" className="shrink-0" right={<span className="font-mono text-[10px] text-slate-500">LIVE PIXEL DETECTOR</span>}>
+      <div className="relative m-[8px] h-[240px] overflow-hidden bg-black outline outline-1 -outline-offset-1 outline-white/10">
         <canvas ref={cvs} width={THERMAL_W} height={THERMAL_H} className="absolute inset-0 h-full w-full" />
         <canvas ref={hud} width={THERMAL_W * K} height={THERMAL_H * K} className="pointer-events-none absolute inset-0 h-full w-full" />
-      </div>
-      <div className="mx-[8px] my-[5px] space-y-[3px] font-mono text-[10px]">
-        <div className="flex justify-between border border-edge bg-[#0b141e] px-[8px] py-[2px] text-slate-300">
-          <span>
-            CV: THRESH R&gt;{HOT_R}∧G&gt;{HOT_G} · DILATE · BFS-CC
-          </span>
-          <span className={det ? 'text-[#39ff14]' : 'text-slate-500'}>{det ? `LOCK W${det.wing} ${det.peakTemp.toFixed(0)}K` : 'NO LOCK'}</span>
-        </div>
-        <div className="flex justify-between border border-edge bg-[#0b141e] px-[8px] py-[2px] text-slate-300">
-          <span>EDS TARGETING</span>
-          <span className={info.eds.startsWith('FIRING') ? 'text-cyan-300' : info.eds.startsWith('ARMED') ? 'text-amber-300' : 'text-slate-500'}>{info.eds}</span>
-        </div>
       </div>
     </Panel>
   );

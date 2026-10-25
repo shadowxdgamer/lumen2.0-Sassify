@@ -27,8 +27,6 @@ import { wingAzimuth } from '../vision/thermalRenderer';
 
 export interface HudState {
   azimuth: number; // camera heading, deg (0 = looking north)
-  axes: { x: [number, number]; y: [number, number]; z: [number, number] };
-  fps: number;
 }
 
 const SLATE = new THREE.Color(0x1e293b);
@@ -84,8 +82,6 @@ export class SceneController {
   private camAnim: { from: THREE.Vector3; to: THREE.Vector3; tFrom: THREE.Vector3; tTo: THREE.Vector3; t: number } | null = null;
   private lastPresetNonce = -1;
   private frames = 0;
-  private fpsTime = 0;
-  private fps = 60;
   private hudCb: (h: HudState) => void;
   private startTime = performance.now();
 
@@ -363,7 +359,7 @@ export class SceneController {
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
     this.labels.render(this.scene, this.camera);
-    this.reportHud(dt);
+    this.reportHud();
   };
 
   private applyPreset(view: ViewState, s: SimSnapshot) {
@@ -445,24 +441,22 @@ export class SceneController {
       return new THREE.Vector3(base.x + Math.sin(a) * r, base.y + CORE_HEIGHT - 0.4, base.z - Math.cos(a) * r);
     };
 
-    // Wing 0 thermal callout.
+    // Wing 0 thermal callout — only shown when there is something to say.
     const hot = s.dust[0] > 0.3 || s.wingTemps[0] > 600;
-    this.lbl.dust.el.className = `hud-label ${hot ? 'hud-red' : 'hud-cyan'}`;
-    this.lbl.dust.el.innerHTML = hot
-      ? `<b>DUST OVERHEATING</b><span>WING 0 · D ${(s.dust[0] * 100).toFixed(0)}% · ε ${s.emissivity[0].toFixed(2)}</span><span>NaK MANIFOLD ${s.wingTemps[0].toFixed(0)}K</span>`
-      : `<b>WING 0 NOMINAL</b><span>D ${(s.dust[0] * 100).toFixed(0)}% · ε ${s.emissivity[0].toFixed(2)}</span><span>MANIFOLD ${s.wingTemps[0].toFixed(0)}K</span>`;
+    this.lbl.dust.obj.visible = hot;
+    this.lbl.dust.el.innerHTML = `<b>DUST OVERHEATING</b><span>WING 0 · DUST ${(s.dust[0] * 100).toFixed(0)}% · ${s.wingTemps[0].toFixed(0)}K</span>`;
     this.lbl.dust.obj.position.copy(wingTip(0, 0.5));
 
     const prad = s.pRad.reduce((a, b) => a + b, 0) / 1000;
     const epsAvg = s.emissivity.reduce((a, b) => a + b, 0) / 4;
-    this.lbl.wings.el.innerHTML = `<b>RADIATING WINGS</b><span>4 × 42 m² · ε̄ ${epsAvg.toFixed(2)}</span><span>P<sub>rad</sub> ${prad.toFixed(1)} kW → 40K SINK</span>`;
+    this.lbl.wings.el.innerHTML = `<b>RADIATING WINGS</b><span>ε ${epsAvg.toFixed(2)} · ${prad.toFixed(0)} kW TO SPACE</span>`;
     this.lbl.wings.obj.position.copy(wingTip(3, 1.5));
 
     const hz = s.radiation.hazardSectors[0];
     this.lbl.hazard.obj.visible = view.showCones && hz !== undefined;
     if (hz !== undefined) {
       const sec = s.radiation.sectors[hz];
-      this.lbl.hazard.el.innerHTML = `<b>HAZARD SHADOW</b><span>AZ ${sec.azimuth.toFixed(0)}° · ${sec.dose.toFixed(0)} rem/yr</span>`;
+      this.lbl.hazard.el.innerHTML = `<b>HAZARD SHADOW</b><span>${sec.dose.toFixed(0)} rem/yr · KEEP OUT</span>`;
       const t = sec.target;
       this.lbl.hazard.obj.position.set(t.x, t.y + 2.2, t.z);
     }
@@ -471,9 +465,8 @@ export class SceneController {
     const ht = habitatTarget();
     this.lbl.habitat.el.className = `hud-label ${hab.secure ? 'hud-cyan' : 'hud-red'}`;
     this.lbl.habitat.el.innerHTML = hab.secure
-      ? `<b>HABITAT DOME</b><b>SECURE</b><span>${hab.dose.toFixed(2)} rem/yr &lt; ${DOSE_LIMIT}</span>`
-      : `<b>HABITAT DOSE</b><b>BREACH</b><span>${hab.dose.toFixed(1)} rem/yr &gt; ${DOSE_LIMIT}</span>`;
-    this.lbl.habitat.el.innerHTML += `<span>B4C θ ${s.shieldAz.toFixed(0)}° · Δθ ${hab.shieldDelta.toFixed(0)}° · S ${hab.shieldDelta <= 25 ? '0.04' : '1.00'}</span><span>REGOLITH ${hab.thickness.toFixed(1)} m · d ${hab.distance.toFixed(0)} m</span>`;
+      ? `<b>HABITAT DOME SECURE</b><span>${hab.dose.toFixed(2)} rem/yr &lt; ${DOSE_LIMIT} LIMIT</span>`
+      : `<b>HABITAT DOSE BREACH</b><span>${hab.dose.toFixed(1)} rem/yr &gt; ${DOSE_LIMIT} LIMIT</span>`;
     this.lbl.habitat.obj.position.set(ht.x - 4, ht.y + 1.5, ht.z + 4);
 
     const core = new THREE.Vector3(s.reactor.x, base.y + CORE_HEIGHT, s.reactor.z);
@@ -482,33 +475,15 @@ export class SceneController {
     this.lbl.tracking.obj.visible = view.showCones;
 
     this.lbl.net.obj.visible = s.netOn;
-    this.lbl.net.el.innerHTML = `<b>ELECTROSTATIC MESH NET</b><span>+12 kV · 85% DEFLECTION · ${this.dust.deflections} HITS</span>`;
+    this.lbl.net.el.innerHTML = `<b>ELECTROSTATIC MESH NET</b><span>DEFLECTING 85% OF DUST</span>`;
     this.lbl.net.obj.position.set(base.x - NET_RADIUS * 0.78, base.y + NET_RADIUS * 0.62, base.z + 2);
   }
 
-  private reportHud(dt: number) {
-    this.frames++;
-    this.fpsTime += dt;
-    if (this.fpsTime >= 0.5) {
-      this.fps = this.frames / this.fpsTime;
-      this.frames = 0;
-      this.fpsTime = 0;
-      this.dust.deflections = Math.round(this.dust.deflections * 0.5);
-    }
-    if (this.frames % 3) return;
+  private reportHud() {
+    if (++this.frames % 3) return;
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
-    const azimuth = azimuthDeg(dir.x, dir.z);
-    const inv = this.camera.matrixWorldInverse;
-    const proj = (v: THREE.Vector3): [number, number] => {
-      const p = v.clone().transformDirection(inv);
-      return [p.x, -p.y];
-    };
-    this.hudCb({
-      azimuth,
-      axes: { x: proj(new THREE.Vector3(1, 0, 0)), y: proj(new THREE.Vector3(0, 1, 0)), z: proj(new THREE.Vector3(0, 0, 1)) },
-      fps: this.fps,
-    });
+    this.hudCb({ azimuth: azimuthDeg(dir.x, dir.z) });
   }
 
   dispose() {

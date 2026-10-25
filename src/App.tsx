@@ -2,12 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { DiagnosticLog } from './components/DiagnosticLog';
 import { EngageButton } from './components/EngageButton';
 import { Header } from './components/Header';
-import { IconRail } from './components/IconRail';
 import { LeftTelemetry } from './components/LeftTelemetry';
 import { PowerTriagePanel } from './components/PowerTriagePanel';
 import { ScenarioBar } from './components/ScenarioBar';
 import { ThermalVisionPanel } from './components/ThermalVisionPanel';
-import { TriageSliders } from './components/TriageSliders';
 import { Viewport3D } from './components/Viewport3D';
 import type { ScenarioId } from './simulation/physicsEngine';
 import { command, startSimulation } from './simulation/store';
@@ -47,31 +45,16 @@ export default function App() {
       <div className="flex h-full w-full flex-col bg-[#070d14] text-slate-200">
         <Header />
         <ScenarioBar />
-        <main className="grid min-h-0 flex-1 grid-cols-[56px_316px_minmax(0,1fr)_372px] gap-[10px] px-[10px] pb-[6px] pt-[8px]">
-          <IconRail />
+        <main className="grid min-h-0 flex-1 grid-cols-[330px_minmax(0,1fr)_384px] gap-[10px] p-[10px]">
           <LeftTelemetry />
           <Viewport3D />
-          <aside className="flex min-h-0 flex-col gap-[8px]">
+          <aside className="flex min-h-0 flex-col gap-[10px]">
             <ThermalVisionPanel />
             <PowerTriagePanel />
-            <TriageSliders />
             <EngageButton />
             <DiagnosticLog />
           </aside>
         </main>
-        <footer className="flex h-[18px] items-center justify-between px-[26px] text-[9px] text-slate-600">
-          <div className="flex gap-[3px]">
-            {Array.from({ length: 14 }, (_, i) => (
-              <span key={i} className="h-[4px] w-[10px] -skew-x-[30deg] bg-slate-700/70" />
-            ))}
-          </div>
-          <span className="font-mono tracking-widest">HELIOSCORE 2030 · IEEE LUMEN 2.0 BEYOND 2030 · DETERMINISTIC BROWSER-NATIVE TWIN · NO EXTERNAL ASSETS</span>
-          <div className="flex gap-[3px]">
-            {Array.from({ length: 14 }, (_, i) => (
-              <span key={i} className="h-[4px] w-[10px] -skew-x-[30deg] bg-slate-700/70" />
-            ))}
-          </div>
-        </footer>
       </div>
     </ScaleToFit>
   );

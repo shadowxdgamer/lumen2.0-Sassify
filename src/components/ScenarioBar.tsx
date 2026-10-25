@@ -15,7 +15,7 @@ export function ScenarioBar() {
   return (
     <div className="flex h-[46px] shrink-0 items-center gap-[8px] border-b border-edge bg-[#09121b] px-[10px]">
       <span className="mr-[4px] flex items-center gap-[6px] font-mono text-[11px] tracking-widest text-slate-500">
-        <Zap size={13} className="text-cyan-400" /> DEMO SCENARIOS
+        <Zap size={13} strokeWidth={1.75} className="text-cyan-400" /> DEMO SCENARIOS
       </span>
       {SCENARIOS.map(({ id, label, detail, icon: Icon, tone }) => {
         const active = s.scenario === id;
@@ -23,17 +23,15 @@ export function ScenarioBar() {
           <button
             key={id}
             onClick={() => command((e) => e.applyScenario(id))}
-            className="flex h-[32px] items-center gap-[8px] border px-[10px] text-left transition-colors hover:bg-white/5"
-            style={{
-              borderColor: active ? tone : '#1d3346',
-              background: active ? `${tone}1f` : '#0b141e',
-              boxShadow: active ? `0 0 12px ${tone}55, inset 0 0 8px ${tone}33` : undefined,
-            }}
+            aria-pressed={active}
+            className="flex h-[32px] items-center gap-[8px] border border-edge bg-[#0b141e] px-[10px] text-left transition-[scale,background-color,border-color] duration-150 ease-out hover:border-edge-hi hover:bg-[#122131] motion-safe:enabled:active:scale-[0.96]"
+            // Inline colours only for the active state, so the hover classes stay effective otherwise.
+            style={active ? { borderColor: tone, background: `${tone}1f`, boxShadow: `0 0 12px ${tone}55, inset 0 0 8px ${tone}33` } : undefined}
           >
             <span className="font-mono text-[12px] font-bold" style={{ color: tone }}>
               [{id}]
             </span>
-            <Icon size={14} style={{ color: tone }} />
+            <Icon size={14} strokeWidth={1.75} style={{ color: tone }} />
             <span className="flex flex-col text-[12.5px] leading-[1.1] tracking-wide text-slate-100">
               {label}
               <span className="font-mono text-[10px] text-slate-400">({detail})</span>

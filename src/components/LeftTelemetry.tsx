@@ -1,53 +1,10 @@
-import { AlertTriangle, CircleAlert } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useMemo } from 'react';
-import { P_TH } from '../simulation/constants';
+import { DOSE_LIMIT, MU_REGOLITH, SHIELD_FACTOR, SHIELD_HALF_ANGLE } from '../simulation/constants';
 import type { SimSnapshot } from '../simulation/physicsEngine';
 import { useSim } from '../simulation/store';
-import { RadialGauge } from './Panel';
 
-const card = 'panel px-[14px] py-[10px]';
-
-function SensorMatrix({ s }: { s: SimSnapshot }) {
-  // Columns: wing manifold temps, wing dust per panel segment, sensor health.
-  const cols = [
-    s.wingTemps.flatMap((t) => [t, t, t].map((x) => (x - 300) / 650)),
-    s.dust.flatMap((d) => [d, d * 0.9, d * 1.05]),
-    s.quadTemps.flatMap((t) => [t, t, t].map((x) => (x - 300) / 650)),
-  ];
-  // Share of the 100 ms tick budget spent in physics + CV (real measured time).
-  const load = Math.min(100, s.physicsMs + s.cvMs);
-  return (
-    <div className={`${card} flex gap-[12px]`}>
-      <div className="flex flex-1 gap-[10px]">
-        {['WING T', 'DUST', 'CORE Q'].map((name, ci) => (
-          <div key={name} className="flex flex-1 flex-col">
-            <span className="mb-[4px] font-mono text-[9px] text-slate-500">{name}</span>
-            <div className="grid grid-cols-4 gap-[2px]">
-              {Array.from({ length: 48 }, (_, k) => {
-                const row = Math.floor(k / 4);
-                const v = cols[ci][row % 12] ?? 0;
-                const lit = (k % 4) / 4 < v + 0.05 * Math.sin(s.tick * 0.7 + k);
-                const hot = v > 0.6;
-                return <span key={k} className="h-[5px]" style={{ background: lit ? (hot ? '#f97316' : '#5b7b95') : '#132231' }} />;
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="flex w-[96px] flex-col items-center">
-        <span className="self-end font-mono text-[9px] text-slate-500">{load.toFixed(1)}%</span>
-        <RadialGauge value={load} min={0} max={10} size={78} label="CPU" warnFrom={8} />
-        <div className="mt-[2px] w-full space-y-[3px]">
-          {[s.physicsMs / 2, s.cvMs / 10, s.netOn ? 1 : 0.15].map((v, i) => (
-            <div key={i} className="h-[3px] bg-[#132231]">
-              <div className="h-full bg-cyan-400" style={{ width: `${Math.min(100, v * 100)}%` }} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+const card = 'panel flex flex-col px-[14px] py-[12px]';
 
 function CoreTempCard({ s }: { s: SimSnapshot }) {
   const t = s.coreTemp;
@@ -56,14 +13,11 @@ function CoreTempCard({ s }: { s: SimSnapshot }) {
   const warn = t > 650;
   return (
     <div className={card}>
-      <div className="flex items-center justify-between">
-        <div className="whitespace-nowrap text-[21px] tracking-wide">
-          CORE TEMP: <span className={`tnum ${hot ? 'text-orange-400' : warn ? 'text-amber-300' : 'text-cyan-300'}`}>{t.toFixed(0)}K</span>
-        </div>
-        <CircleAlert size={22} className={hot ? 'text-red-500' : 'text-slate-600'} />
+      <div className="whitespace-nowrap text-[22px] tracking-wide">
+        CORE TEMP: <span className={`tnum ${hot ? 'text-orange-400' : warn ? 'text-amber-300' : 'text-cyan-300'}`}>{t.toFixed(0)}K</span>
       </div>
-      <div className="mt-[10px] flex items-center gap-[14px]">
-        <AlertTriangle size={46} strokeWidth={1.6} className={hot ? 'blink text-red-500 drop-shadow-[0_0_10px_#ef4444]' : warn ? 'text-amber-400' : 'text-slate-600'} />
+      <div className="mt-[12px] flex items-center gap-[14px]">
+        <AlertTriangle size={44} strokeWidth={1.5} className={hot ? 'blink text-red-500 drop-shadow-[0_0_10px_#ef4444]' : warn ? 'text-amber-400' : 'text-slate-600'} />
         <div className="flex-1">
           <div className="flex h-[44px] gap-[5px]">
             {Array.from({ length: 10 }, (_, i) => {
@@ -72,16 +26,12 @@ function CoreTempCard({ s }: { s: SimSnapshot }) {
               return <div key={i} className="flex-1 rounded-[2px]" style={{ background: on ? c : '#1a1414', boxShadow: on ? `0 0 8px ${c}` : undefined, opacity: on ? 1 : 0.6 }} />;
             })}
           </div>
-          <div className="mt-[3px] flex justify-between font-mono text-[9px] text-slate-500">
+          <div className="mt-[4px] flex justify-between font-mono text-[10px] text-slate-500">
             <span>300K</span>
-            <span className="text-amber-500/80">650</span>
-            <span className="text-red-400/80">750 THR</span>
+            <span className="text-red-400/80">750K THROTTLE</span>
             <span>1000K</span>
           </div>
         </div>
-      </div>
-      <div className="mt-[4px] font-mono text-[10px] text-slate-500">
-        HOT-CHANNEL Q{s.quadTemps.indexOf(Math.max(...s.quadTemps))} · Q {s.quadTemps.map((q) => q.toFixed(0)).join('/')} K
       </div>
     </div>
   );
@@ -95,6 +45,7 @@ function AreaChart({ data, min, max, w, h, color, threshold }: { data: number[];
     return { line, area: `${line} L${w},${h} L0,${h} Z` };
   }, [data, min, max, w, h]);
   const id = `g${color.slice(1)}`;
+  const ty = threshold !== undefined ? h - ((threshold - min) / (max - min)) * h : 0;
   return (
     <svg width={w} height={h} className="overflow-visible">
       <defs>
@@ -106,9 +57,7 @@ function AreaChart({ data, min, max, w, h, color, threshold }: { data: number[];
       {[0.25, 0.5, 0.75].map((f) => (
         <line key={f} x1={0} x2={w} y1={h * f} y2={h * f} stroke="#16283a" strokeDasharray="2 3" />
       ))}
-      {threshold !== undefined && (
-        <line x1={0} x2={w} y1={h - ((threshold - min) / (max - min)) * h} y2={h - ((threshold - min) / (max - min)) * h} stroke="#ef4444" strokeDasharray="4 3" opacity={0.6} />
-      )}
+      {threshold !== undefined && <line x1={0} x2={w} y1={ty} y2={ty} stroke="#ef4444" strokeDasharray="4 3" opacity={0.6} />}
       <path d={path.area} fill={`url(#${id})`} />
       <path d={path.line} stroke={color} strokeWidth={2} fill="none" />
     </svg>
@@ -119,36 +68,29 @@ function EmissivityCard({ s }: { s: SimSnapshot }) {
   const worst = Math.min(...s.emissivity);
   const wi = s.emissivity.indexOf(worst);
   return (
-    <div className={card}>
-      <div className="flex items-baseline justify-between whitespace-nowrap text-[18px] tracking-wide">
+    <div className={`${card} flex-1`}>
+      <div className="flex items-baseline justify-between whitespace-nowrap text-[19px] tracking-wide">
         <span>
           RADIATOR EMISSIVITY: <span className={`tnum ${worst < 0.6 ? 'text-amber-300' : 'text-cyan-300'}`}>{worst.toFixed(2)}</span>
         </span>
-        <span className="font-mono text-[10px] text-slate-500">W{wi}</span>
+        <span className="font-mono text-[11px] text-slate-500">WING {wi}</span>
       </div>
-      <div className="mt-[6px] flex gap-[6px]">
-        <div className="flex h-[92px] flex-col justify-between font-mono text-[9px] text-slate-500">
+      <div className="mt-auto flex gap-[6px] pt-[8px]">
+        <div className="flex h-[178px] flex-col justify-between font-mono text-[10px] text-slate-500">
           <span>0.9</span>
-          <span>0.7</span>
-          <span>0.5</span>
+          <span>0.6</span>
           <span>0.3</span>
         </div>
-        <AreaChart data={s.history.eps} min={0.3} max={0.95} w={252} h={92} color="#fbbf24" threshold={0.6} />
+        <AreaChart data={s.history.eps} min={0.3} max={0.95} w={272} h={178} color="#fbbf24" threshold={0.6} />
       </div>
-      <div className="mt-[4px] flex justify-between font-mono text-[9.5px] text-slate-400">
-        {s.emissivity.map((e, i) => (
-          <span key={i} className={e < 0.6 ? 'text-amber-300' : ''}>
-            W{i} {e.toFixed(2)}/{(s.dust[i] * 100).toFixed(0)}%
-          </span>
-        ))}
-      </div>
+      <div className="mt-[4px] font-mono text-[10px] text-slate-500">LAST 30 s · DUST {(s.dust[wi] * 100).toFixed(0)}% ON WING {wi}</div>
     </div>
   );
 }
 
 function PowerCard({ s }: { s: SimSnapshot }) {
-  const w = 252;
-  const h = 84;
+  const w = 272;
+  const h = 158;
   const amp = (s.pe / 40_000) * (h / 2 - 6);
   const phase = s.tick * 0.9;
   const wave = Array.from({ length: 120 }, (_, i) => {
@@ -157,64 +99,70 @@ function PowerCard({ s }: { s: SimSnapshot }) {
     return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ');
   return (
-    <div className={card}>
+    <div className={`${card} flex-1`}>
       <div className="flex items-baseline justify-between whitespace-nowrap text-[19px] tracking-wide">
         <span>
           POWER OUTPUT: <span className={`tnum ${s.throttled ? 'text-amber-300' : 'text-cyan-300'}`}>{(s.pe / 1000).toFixed(1)} kWe</span>
         </span>
-        {s.throttled && <span className="blink font-mono text-[10px] text-red-400">THROTTLED</span>}
+        {s.throttled && <span className="blink font-mono text-[11px] text-red-400">THROTTLED</span>}
       </div>
-      <div className="mt-[6px] flex gap-[6px]">
-        <div className="flex h-[84px] flex-col justify-between font-mono text-[9px] text-slate-500">
+      <div className="mt-auto flex gap-[6px] pt-[8px]">
+        <div className="flex h-[158px] flex-col justify-between font-mono text-[10px] text-slate-500">
           <span>+40</span>
           <span>0</span>
           <span>−40</span>
         </div>
         <svg width={w} height={h}>
           <line x1={0} x2={w} y1={h / 2} y2={h / 2} stroke="#16283a" />
-          {[0.25, 0.75].map((f) => (
-            <line key={f} x1={0} x2={w} y1={h * f} y2={h * f} stroke="#16283a" strokeDasharray="2 3" />
-          ))}
           <path d={wave} stroke="#22d3ee" strokeWidth={1.8} fill="none" style={{ filter: 'drop-shadow(0 0 3px #22d3ee)' }} />
         </svg>
       </div>
-      <div className="mt-[2px] flex justify-between font-mono text-[9.5px] text-slate-400">
-        <span>ALTERNATOR 60 Hz</span>
-        <span>P_th {(P_TH / 1000).toFixed(0)} kWt</span>
-        <span>η {(s.stirlingEff * 100).toFixed(1)}%</span>
-      </div>
+      <div className="mt-[4px] font-mono text-[10px] text-slate-500">STIRLING EFFICIENCY {(s.stirlingEff * 100).toFixed(1)}% OF 175 kWt</div>
     </div>
   );
 }
 
-function StirlingGauge({ s }: { s: SimSnapshot }) {
-  const prad = s.pRad.reduce((a, b) => a + b, 0) / 1000;
-  const rows: [string, string, boolean][] = [
-    ['STIRLING η', `${(s.stirlingEff * 100).toFixed(1)}%`, s.throttled],
-    ['CORE TEMP', `${s.coreTemp.toFixed(0)} K`, s.coreTemp > 750],
-    ['RADIATOR ΣP', `${prad.toFixed(1)} kW`, false],
-    ['SHADOW', s.radiation.habitat.secure ? 'SECURE' : 'BREACH', !s.radiation.habitat.secure],
-    ['STABILIZER', s.throttled ? 'THROTTLE' : 'FULL', s.throttled],
-    ['WATER LINE', `${s.pipeTemp.toFixed(1)} K`, s.pipeTemp < 276],
+/** Explains the habitat dose as its three physical factors: distance, shield, terrain. */
+function RadiationCard({ s }: { s: SimSnapshot }) {
+  const hab = s.radiation.habitat;
+  const inShield = hab.shieldDelta <= SHIELD_HALF_ANGLE;
+  const terrain = Math.exp(-MU_REGOLITH * hab.thickness);
+  // Log scale 0.01 → 100 rem/yr.
+  const pos = (d: number) => Math.min(100, Math.max(0, ((Math.log10(Math.max(d, 0.01)) + 2) / 4) * 100));
+  const color = hab.secure ? '#4ade80' : '#f87171';
+  const factors: [string, string, string, boolean][] = [
+    ['DISTANCE', `${hab.distance.toFixed(0)} m`, '1 / d²', true],
+    ['B4C SHIELD', inShield ? `ON TARGET (Δθ ${hab.shieldDelta.toFixed(0)}°)` : `MISSED (Δθ ${hab.shieldDelta.toFixed(0)}°)`, `× ${inShield ? SHIELD_FACTOR.toFixed(2) : '1.00'}`, inShield],
+    ['TERRAIN', `${hab.thickness.toFixed(1)} m regolith`, `× ${terrain < 0.01 ? terrain.toExponential(0) : terrain.toFixed(2)}`, hab.thickness > 1],
   ];
-  const bars = [s.pe / 40_000, prad / 180];
   return (
-    <div className={`${card} flex flex-1 items-center gap-[10px]`}>
-      <div className="flex h-[150px] gap-[6px]">
-        {bars.map((v, i) => (
-          <div key={i} className="flex w-[14px] flex-col-reverse gap-[2px]">
-            {Array.from({ length: 18 }, (_, k) => (
-              <span key={k} className="h-[6px]" style={{ background: k / 18 < v ? '#22d3ee' : '#132231', opacity: k / 18 < v ? 0.5 + k / 36 : 1 }} />
-            ))}
-          </div>
-        ))}
+    <div className={card}>
+      <div className="flex items-baseline justify-between whitespace-nowrap text-[19px] tracking-wide">
+        <span>
+          HABITAT DOSE: <span className="tnum" style={{ color }}>{hab.dose.toFixed(2)}</span>
+          <span className="text-[13px] text-slate-400"> rem/yr</span>
+        </span>
+        <span className={`font-mono text-[12px] font-semibold ${hab.secure ? '' : 'blink'}`} style={{ color }}>
+          {hab.secure ? 'SECURE' : 'BREACH'}
+        </span>
       </div>
-      <RadialGauge value={s.pe / 1000} min={0} max={45} size={136} label={`${(s.pe / 1000).toFixed(1)}`} unit="kWe" warnFrom={40} />
-      <div className="flex flex-1 flex-col gap-[5px] font-mono text-[10px]">
-        {rows.map(([k, v, bad]) => (
-          <div key={k} className="border-b border-edge/60 pb-[2px]">
-            <div className="text-slate-500">{k}</div>
-            <div className={`tnum ${bad ? 'text-orange-400' : 'text-slate-200'}`}>{v}</div>
+      <div className="relative mt-[10px] h-[8px] rounded-[2px] bg-gradient-to-r from-emerald-500/40 via-amber-400/40 to-red-500/50">
+        <div className="absolute inset-y-[-4px] w-[2px] bg-white/70" style={{ left: `${pos(DOSE_LIMIT)}%` }} />
+        <div className="absolute top-1/2 h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#070d14]" style={{ left: `${pos(hab.dose)}%`, background: color, boxShadow: `0 0 8px ${color}` }} />
+      </div>
+      <div className="relative mt-[3px] h-[12px] font-mono text-[10px] text-slate-500">
+        <span className="absolute left-0">0.01</span>
+        <span className="absolute -translate-x-1/2 text-slate-300" style={{ left: `${pos(DOSE_LIMIT)}%` }}>
+          LIMIT {DOSE_LIMIT}
+        </span>
+        <span className="absolute right-0">100</span>
+      </div>
+      <div className="mt-[8px] space-y-[5px] font-mono text-[11px]">
+        {factors.map(([k, v, f, good]) => (
+          <div key={k} className="flex items-center justify-between border-b border-edge/60 pb-[4px]">
+            <span className="w-[84px] text-slate-500">{k}</span>
+            <span className={`flex-1 ${good ? 'text-slate-200' : 'text-orange-300'}`}>{v}</span>
+            <span className="text-cyan-300 tnum">{f}</span>
           </div>
         ))}
       </div>
@@ -225,12 +173,11 @@ function StirlingGauge({ s }: { s: SimSnapshot }) {
 export function LeftTelemetry() {
   const s = useSim();
   return (
-    <div className="flex min-h-0 flex-col gap-[8px]">
-      <SensorMatrix s={s} />
+    <div className="flex min-h-0 flex-col gap-[10px]">
       <CoreTempCard s={s} />
       <EmissivityCard s={s} />
       <PowerCard s={s} />
-      <StirlingGauge s={s} />
+      <RadiationCard s={s} />
     </div>
   );
 }

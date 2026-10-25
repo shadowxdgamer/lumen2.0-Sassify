@@ -13,10 +13,10 @@ export function DiagnosticLog() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [last]);
   return (
-    <Panel title="DIAGNOSTIC LOG" windowControls className="flex-1" bodyClassName="flex">
-      <div ref={box} className="log-scroll min-h-0 flex-1 overflow-y-auto px-[10px] py-[5px] font-mono text-[10.5px] leading-[1.45]">
+    <Panel title="DIAGNOSTIC LOG" className="flex-1" bodyClassName="flex">
+      <div ref={box} className="log-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-[12px] py-[6px] font-mono text-[11px] leading-[1.5]">
         {s.logs.map((l) => (
-          <div key={l.id} style={{ color: LEVEL_COLOR[l.level] }}>
+          <div key={l.id} className="mb-[2px]" style={{ color: LEVEL_COLOR[l.level] }}>
             <span className="text-slate-500">[{l.time}]</span> {l.msg}
           </div>
         ))}
