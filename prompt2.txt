@@ -1,0 +1,87 @@
+You are a Principal Aerospace Simulation Engineer and Senior React/Three.js Architect. We are building "HELIOSCORE 2030" — an Autonomous Lunar Nuclear Fission Digital Twin, Electrostatic Defense & Survival Micro-Grid SaaS for the IEEE Lumen 2.0 "Beyond 2030" Hackathon.
+
+Inspect the two attached UI mockup images carefully:
+- Image 1: Single-screen Mission Control dashboard showing the center 3D lunar crater viewport with the nuclear fission reactor, 4 unfolding radiator wings (one glowing bright thermal orange labeled `DUST OVERHEATING`), red (`HAZARD SHADOW`) and green (`HABITAT DOME SECURE`) radiation raycast cones toward the geodesic habitat dome, left telemetry sidebar (`CORE TEMP: 920K`, `RADIATOR EMISSIVITY: 0.42`, `POWER OUTPUT: 24.5 kWe`), and right `SURVIVAL POWER TRIAGE` panel with `ENGAGE AUTONOMOUS PROTECTION` CTA button and `DIAGNOSTIC LOG`.
+- Image 2: Same dashboard with the active cyan wireframe Electrostatic Mesh Net dome deflecting incoming charged lunar dust with electric sparks, plus the top-right `INFRARED THERMAL AI VISION` false-color camera feed displaying a real-time neon green bounding box (`AI THERMAL ANOMALY: DUST 89%`) locked onto the overheating radiator wing.
+
+DO NOT interview me or ask clarifying questions. All architectural decisions are locked below.
+1. First, write the complete engineering & pitch defense specification to `.plans/helioscore-2030-spec.md`.
+2. Immediately after, scaffold and implement the complete, 100% working, end-to-end web application so it compiles and runs cleanly with zero errors.
+
+---
+
+## 1. ARCHITECTURAL DECISIONS (LOCKED — ZERO EXTERNAL ASSETS)
+
+1. **100% Browser-Native Monolithic App:** Use Vite + React + TypeScript + Tailwind CSS + Three.js (`@react-three/fiber` + `@react-three/drei` or clean imperative `THREE.WebGLRenderer` inside a React ref) + Lucide React icons. Do NOT create a Python backend or external API dependency; everything must run deterministically at 60 FPS / 10 Hz physics tick inside the browser.
+2. **100% Procedural 3D Assets (No `.glb` / `.gltf` network fetches):**
+   - **Lunar Crater Terrain:** High-resolution `THREE.PlaneGeometry(80, 80, 128, 128)` with deterministic radial crater elevation (ring peak at radius R, depressed crater floor, elevated outer shelf for the Habitat Dome, plus multi-octave procedural noise for rocky regolith ridges) and dark lunar regolith standard material (`roughness: 0.92`, `metalness: 0.08`).
+   - **Fission Reactor Core & Stirling Tower:** Procedural multi-tiered cylindrical metallic reactor vessel with glowing internal core ring slots (`emissive: 0xff6600` scaling with `coreTemp`), top axial shadow-shield cap, and structural struts.
+   - **4 Unfolding Composite Radiator Wings:** 4 pivoted rectangular panel arrays (`RADIATOR WINGS`) extending radially at 90° intervals. Each wing has a grid texture/wireframe overlay. Wing 0 (front-left) dynamically blends its shader/emissive color from cool dark slate (`0x1e293b`) to fierce glowing thermal orange-yellow (`0xff5500` -> `0xffcc00`) based on its local temperature `wingTemp[0]`.
+   - **Geodesic Habitat Dome:** `THREE.IcosahedronGeometry(3.8, 2)` top hemisphere positioned on the upper-right crater rim (`HABITAT DOME SECURE`), rendered with a translucent glass inner shell and crisp metallic geodesic wireframe cage.
+   - **Active Electrostatic Mesh Net Dome:** Large toggleable `THREE.IcosahedronGeometry(16, 3)` hemisphere surrounding the reactor (`wireframe: true`, glowing cyan `0x00ffff`, pulsing opacity), paired with a live `THREE.Points` charged lunar dust particle system and procedural cyan electric arc line segments (`THREE.LineSegments`) that spark whenever dust particles collide with the dome surface.
+   - **3D Volumetric Radiation Cones & Floating HUD Labels:** Semi-transparent additive-blended red (`HAZARD SHADOW`) and green (`HABITAT DOME SECURE`) volumetric cone/wedge meshes projecting from the reactor core toward the crater walls and Habitat Dome, plus dashed 3D tracking lines (`3D TRACKING`) and floating HUD callouts matching the mockups (`DUST OVERHEATING`, `RADIATOR WINGS`, `HAZARD SHADOW`, `HABITAT DOME SECURE`).
+
+---
+
+## 2. COUPLED PHYSICS ENGINE (`src/simulation/physicsEngine.ts`)
+
+Every number, chart, 3D shader, and bounding box in the UI must be driven by a live 10 Hz coupled differential equation loop—never hardcoded static strings:
+
+### A. 3D Crater Siting, Directional $B_4C$ Shadow Shield & Raycast Occlusion
+- Allow the operator to drag/move the reactor position `(rx, rz)` inside the crater AND rotate its Boron-Carbide ($B_4C$) Directional Shadow Shield azimuth angle $\theta_{\text{shield}}$ (plus provide an `"Auto-Optimize Siting"` button).
+- Cast rays using `THREE.Raycaster` from the reactor core toward 36 azimuthal sectors and directly toward the Habitat Dome position.
+- Compute radiation dose at distance $d$ with regolith intersection thickness $x$ (meters of crater terrain intersected by the raycaster) and directional shadow-plug attenuation $S(\Delta\theta)$ ($0.04$ inside the $\pm 25^\circ$ $B_4C$ shadow shield cone, $1.0$ outside):
+  $$I(d, x, \Delta\theta) = \frac{I_0 \cdot S(\Delta\theta)}{d^2} \cdot e^{-\mu_{\text{regolith}} \cdot x}$$
+- When the Habitat vector is protected by the shadow shield and/or terrain occlusion ($I < 5.0\text{ rem/yr}$), render the Habitat cone in **Green** (`HABITAT DOME SECURE`). Unshielded lateral sectors hitting the crater wall render as **Red Hazard Cones** (`HAZARD SHADOW`). If the user drags the reactor into an unshielded line-of-sight alignment, the Habitat cone dynamically turns Red and triggers a radiation warning in the diagnostic log.
+
+### B. Vacuum Stefan-Boltzmann Heat Rejection & Lunar Dust Thermal Choking
+- Reactor thermal power $P_{\text{th}} = 175\text{ kWt}$ nominal. Lunar night sink temperature $T_{\text{sink}} = 40\text{ K}$.
+- Each of the 4 radiator wings ($i \in \{0,1,2,3\}$, surface area $A_i = 42\text{ m}^2$) has a dust fouling fraction $D_i \in [0, 1]$.
+- Effective radiator emissivity drops linearly with silicate dust coverage:
+  $$\epsilon_i(D_i) = 0.90 - 0.54 \cdot D_i$$
+  (At $D_0 = 0.89$ dust fouling on Wing 0, effective emissivity equals $0.42$, matching `RADIATOR EMISSIVITY: 0.42`).
+- Heat rejected into hard vacuum per wing via Stefan-Boltzmann law:
+  $$P_{\text{rad}, i} = \epsilon_i(D_i) \cdot \sigma \cdot A_i \cdot (T_{\text{wing}, i}^4 - T_{\text{sink}}^4)$$
+- Why the fouled wing glows brighter: When dust insulates Wing 0 ($\epsilon_0 \rightarrow 0.42$), heat cannot escape efficiently, causing the internal NaK liquid-metal coolant manifold temperature $T_{\text{wing}, 0}$ and reactor core temperature $T_{\text{core}}$ to climb rapidly toward $920\text{ K}$ (`CORE TEMP: 920K`).
+
+### C. Real Pixel-Buffer "Infrared Thermal AI Vision" Detector (`src/components/ThermalVisionPanel.tsx`)
+To comply with Hackathon Rule 12.3 (It Must Work) and Rule 12.5 (AI Transparency), build a genuine two-stage synthetic LWIR thermal camera + pixel clustering computer vision pipeline on a real HTML5 `<canvas>` (260x170 resolution):
+1. **Stage 1 (Physical Temperature-to-Ironbow False-Color Renderer):** Render the 4 radiator wings and central core from an overhead mast camera perspective onto the thermal canvas. Convert every pixel's physical temperature $T(x,y)$ into an authentic Ironbow/Inferno thermal gradient (deep purple/indigo `40K–200K` cold background -> magenta/red structure -> bright glowing yellow-white `850K–920K` overheated Wing 0 manifold with blotchy dust occlusion patterns and realistic Gaussian sensor noise).
+2. **Stage 2 (Real-Time `getImageData()` Connected-Component Anomaly Detector):** Every 100ms, read the raw RGBA pixel buffer via `ctx.getImageData(0, 0, W, H)`. Scan all pixels to cluster high-temperature thermal anomaly pixels ($R > 220$ and $G > 130$). Compute the real bounding box `(minX, minY, maxX, maxY)`, spatial centroid, pixel area ratio, and anomaly confidence score (`Math.min(99, Math.round(dustFraction * 100))`).
+3. **Stage 3 (HUD Targeting Overlay):** Draw the neon green bounding box, crosshair reticle, vertical thermal colorbar scale (`35°C` to `920K`), and label `AI THERMAL ANOMALY: DUST ${confidence}%` directly over the detected coordinates on the canvas.
+
+### D. Stirling Throttle-Down, Electrostatic Net & Survival Micro-Grid Triage
+- When $T_{\text{core}} > 750\text{ K}$, automatic core protection throttles the free-piston Stirling electrical output down from $40.0\text{ kWe}$ to $24.5\text{ kWe}$ (`POWER OUTPUT: 24.5 kWe`) so the converters do not seize.
+- Clicking the glowing cyan `ENGAGE AUTONOMOUS PROTECTION` button triggers a coordinated 3-part autonomous response:
+  1. **Electrostatic Mesh Net Activation:** Deploys the cyan wireframe geodesic dome around the reactor, deflecting 85% of incoming charged dust particles with animated cyan electric arcs.
+  2. **Targeted 3-Phase EDS Travelling-Wave Pulse:** Using the `(minX, minY, maxX, maxY)` sector coordinates from the Thermal Vision detector, fires a high-voltage dielectrophoretic pulse exclusively on Wing 0, sweeping dust coverage $D_0$ from $89\% \rightarrow 2\%$ over ~6 seconds as emissivity recovers from $0.42 \rightarrow 0.89$ and Core Temp cools from $920\text{ K} \rightarrow 410\text{ K}$.
+  3. **Automated Survival Power Triage:** Dynamically re-allocates the throttled $24.5\text{ kWe}$ budget across `LIFE SUPPORT`, `COMMS`, `HABITAT`, and `SCIENCE` (shedding non-essential science/drills and duty-cycling habitat water-line heaters so pipe temperatures never drop below $273.15\text{ K}$ freezing threshold).
+
+---
+
+## 3. UI/UX MISSION CONTROL LAYOUT (MATCH ATTACHED MOCKUPS 1 & 2)
+
+Build a dark-mode SpaceX/Palantir-inspired sci-fi Mission Control interface (`bg-[#070d14]`, cyan/slate borders, monospace telemetry readouts) that fits on a single 1080p screen without scrolling:
+- **Top Header Bar:** `HELIOSCORE 2030` logo, `SYSTEM STATUS` indicator (`NOMINAL` / `WARNING` / `CRITICAL`), `LUNAR DIGITAL TWIN // NUCLEAR FISSION TWIN` center banner, and an interactive **Demo Scenario Controller** bar with 4 buttons:
+  1. `[1] NOMINAL BASELINE (40.0 kWe / 410K)`
+  2. `[2] TRIGGER LANDER DUST CRISIS (89% FOUL / 920K)` (matches Image 1 state)
+  3. `[3] ENGAGE AUTONOMOUS PROTECTION (EDS + NET + TRIAGE)` (matches Image 2 state)
+  4. `[4] SITING HAZARD TEST (UNSHIELDED RADIATION)`
+  Plus a manual **Dust Fouling Slider (0–100%)** so judges can test arbitrary values live during Q&A.
+- **Far-Left Icon Rail & Left Telemetry Sidebar:**
+  - Sensor/CPU radial gauge and matrix bars at top.
+  - `CORE TEMP: {coreTemp}K` card with red warning triangle and 10-bar segmented LED meter.
+  - `RADIATOR EMISSIVITY: {emissivity}` card with live SVG area curve chart.
+  - `POWER OUTPUT: {powerOutput} kWe` card with live oscillating sinusoidal waveform SVG chart.
+  - Bottom circular radial gauge showing Stirling efficiency, core temp, radiator, and shadow status.
+- **Center 3D Viewport (`3D VIEWPORT // THREE.JS ENGINE`):**
+  - Compass overlay (`N/E/S/W`) at top-left, top toolbar buttons (camera presets, toggle Electrostatic Dome, toggle Radiation Cones, Auto-Optimize Siting), XYZ gizmo at top-right, and draggable reactor positioning on the crater floor.
+- **Right Sidebar (Shows BOTH Thermal AI Vision & Survival Power Triage):**
+  - **Top Panel:** `INFRARED THERMAL AI VISION` live false-color canvas with real-time pixel anomaly bounding box (`AI THERMAL ANOMALY: DUST 89%`) AND a toggle or compact stacked view of the `SURVIVAL POWER TRIAGE` segmented bar meters (`LIFE SUPPORT`, `COMMS`, `HABITAT`, `SCIENCE`) so every element from both Image 1 and Image 2 is visible and interactive.
+  - **Middle Panel (`TRIAGE`):** Interactive manual override sliders for `LIFE`, `COMMS`, and `SCIENCE` plus habitat water-pipe freeze margin indicator.
+  - **Primary CTA Button:** Large glowing cyan futuristic button `ENGAGE AUTONOMOUS PROTECTION`.
+  - **Bottom Panel (`DIAGNOSTIC LOG`):** Live auto-scrolling timestamped engineering log recording every physics threshold, CV bounding-box lock, EDS pulse, and load-shedding event.
+
+Verify that `npm run build` succeeds with zero TypeScript or bundler errors.
+
+"use the images as reference"
