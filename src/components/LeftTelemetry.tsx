@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import { useMemo } from 'react';
-import { DOSE_LIMIT, MU_REGOLITH, SHIELD_FACTOR, SHIELD_HALF_ANGLE } from '../simulation/constants';
+import { LOAD_NOMINAL } from '../simulation/constants';
 import type { SimSnapshot } from '../simulation/physicsEngine';
 import { useSim } from '../simulation/store';
 
@@ -122,47 +122,48 @@ function PowerCard({ s }: { s: SimSnapshot }) {
   );
 }
 
-/** Explains the habitat dose as its three physical factors: distance, shield, terrain. */
-function RadiationCard({ s }: { s: SimSnapshot }) {
-  const hab = s.radiation.habitat;
-  const inShield = hab.shieldDelta <= SHIELD_HALF_ANGLE;
-  const terrain = Math.exp(-MU_REGOLITH * hab.thickness);
-  // Log scale 0.01 → 100 rem/yr.
-  const pos = (d: number) => Math.min(100, Math.max(0, ((Math.log10(Math.max(d, 0.01)) + 2) / 4) * 100));
-  const color = hab.secure ? '#4ade80' : '#f87171';
-  const factors: [string, string, string, boolean][] = [
-    ['DISTANCE', `${hab.distance.toFixed(0)} m`, '1 / d²', true],
-    ['B4C SHIELD', inShield ? `ON TARGET (Δθ ${hab.shieldDelta.toFixed(0)}°)` : `MISSED (Δθ ${hab.shieldDelta.toFixed(0)}°)`, `× ${inShield ? SHIELD_FACTOR.toFixed(2) : '1.00'}`, inShield],
-    ['TERRAIN', `${hab.thickness.toFixed(1)} m regolith`, `× ${terrain < 0.01 ? terrain.toExponential(0) : terrain.toFixed(2)}`, hab.thickness > 1],
+type Tone = 'ok' | 'idle' | 'warn' | 'bad';
+const TONE: Record<Tone, string> = { ok: '#4ade80', idle: '#94a3b8', warn: '#fbbf24', bad: '#f87171' };
+
+/** The three defense-in-depth layers the story walks through: net, drills, crew. */
+function DefenseCard({ s }: { s: SimSnapshot }) {
+  const drillsKw = s.triage.alloc.drills / 1000;
+  const lifeKw = s.triage.alloc.life / 1000;
+  const lifePct = Math.round((s.triage.alloc.life / LOAD_NOMINAL.life) * 100);
+  const rows: { label: string; value: string; tone: Tone }[] = [
+    {
+      label: 'PERIMETER MESH NET',
+      value: s.netFault ? 'MALFUNCTION (OFFLINE)' : s.netOn ? 'AUTO-ACTIVE (85% DEFLECTION)' : 'STANDBY',
+      tone: s.netFault ? 'bad' : s.netOn ? 'ok' : 'idle',
+    },
+    {
+      label: 'ICE DRILL RIGS (ISRU)',
+      value: s.triage.failsafe
+        ? 'DISABLED - FAILSAFE TRIAGE (0.0 kW)'
+        : drillsKw < LOAD_NOMINAL.drills / 1000 - 0.5
+          ? `REDUCED (${drillsKw.toFixed(1)} kW)`
+          : `ACTIVE (${drillsKw.toFixed(1)} kW)`,
+      tone: s.triage.failsafe ? 'bad' : drillsKw < 15.5 ? 'warn' : 'ok',
+    },
+    {
+      label: 'HABITAT LIFE SUPPORT',
+      value: `${lifeKw.toFixed(1)} kW (${lifePct}% PROTECTED)`,
+      tone: lifePct >= 100 ? 'ok' : 'bad',
+    },
   ];
   return (
     <div className={card}>
-      <div className="flex items-baseline justify-between whitespace-nowrap text-[19px] tracking-wide">
-        <span>
-          HABITAT DOSE: <span className="tnum" style={{ color }}>{hab.dose.toFixed(2)}</span>
-          <span className="text-[13px] text-slate-400"> rem/yr</span>
-        </span>
-        <span className={`font-mono text-[12px] font-semibold ${hab.secure ? '' : 'blink'}`} style={{ color }}>
-          {hab.secure ? 'SECURE' : 'BREACH'}
-        </span>
-      </div>
-      <div className="relative mt-[10px] h-[8px] rounded-[2px] bg-gradient-to-r from-emerald-500/40 via-amber-400/40 to-red-500/50">
-        <div className="absolute inset-y-[-4px] w-[2px] bg-white/70" style={{ left: `${pos(DOSE_LIMIT)}%` }} />
-        <div className="absolute top-1/2 h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#070d14]" style={{ left: `${pos(hab.dose)}%`, background: color, boxShadow: `0 0 8px ${color}` }} />
-      </div>
-      <div className="relative mt-[3px] h-[12px] font-mono text-[10px] text-slate-500">
-        <span className="absolute left-0">0.01</span>
-        <span className="absolute -translate-x-1/2 text-slate-300" style={{ left: `${pos(DOSE_LIMIT)}%` }}>
-          LIMIT {DOSE_LIMIT}
-        </span>
-        <span className="absolute right-0">100</span>
-      </div>
-      <div className="mt-[8px] space-y-[5px] font-mono text-[11px]">
-        {factors.map(([k, v, f, good]) => (
-          <div key={k} className="flex items-center justify-between border-b border-edge/60 pb-[4px]">
-            <span className="w-[84px] text-slate-500">{k}</span>
-            <span className={`flex-1 ${good ? 'text-slate-200' : 'text-orange-300'}`}>{v}</span>
-            <span className="text-cyan-300 tnum">{f}</span>
+      <div className="text-[19px] tracking-wide">DEFENSE &amp; MINING STATUS</div>
+      <div className="mt-[10px] space-y-[8px]">
+        {rows.map(({ label, value, tone }) => (
+          <div key={label} className="flex items-start gap-[10px] border-b border-edge/60 pb-[7px] last:border-b-0 last:pb-0">
+            <span className="mt-[4px] h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: TONE[tone], boxShadow: `0 0 8px ${TONE[tone]}` }} />
+            <div className="min-w-0">
+              <div className="font-mono text-[10.5px] tracking-wider text-slate-500">{label}</div>
+              <div className={`font-mono text-[13px] font-semibold ${tone === 'bad' ? 'blink' : ''}`} style={{ color: TONE[tone] }}>
+                {value}
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -177,7 +178,7 @@ export function LeftTelemetry() {
       <CoreTempCard s={s} />
       <EmissivityCard s={s} />
       <PowerCard s={s} />
-      <RadiationCard s={s} />
+      <DefenseCard s={s} />
     </div>
   );
 }

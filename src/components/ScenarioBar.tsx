@@ -1,12 +1,12 @@
-import { CloudFog, Play, ShieldCheck, Siren, Zap } from 'lucide-react';
+import { CloudFog, Play, ScanSearch, ShieldAlert, Zap } from 'lucide-react';
 import type { ScenarioId } from '../simulation/physicsEngine';
 import { command, useSim } from '../simulation/store';
 
 const SCENARIOS: { id: ScenarioId; label: string; detail: string; icon: typeof Play; tone: string }[] = [
-  { id: 1, label: 'NOMINAL BASELINE', detail: '40.0 kWe / 410K', icon: Play, tone: '#4ade80' },
-  { id: 2, label: 'TRIGGER LANDER DUST CRISIS', detail: '89% FOUL / 920K', icon: CloudFog, tone: '#f97316' },
-  { id: 3, label: 'ENGAGE AUTONOMOUS PROTECTION', detail: 'EDS + NET + TRIAGE', icon: ShieldCheck, tone: '#22d3ee' },
-  { id: 4, label: 'SITING HAZARD TEST', detail: 'UNSHIELDED RADIATION', icon: Siren, tone: '#ef4444' },
+  { id: 1, label: 'NOMINAL BASELINE', detail: '40.0 kWe / 411K', icon: Play, tone: '#4ade80' },
+  { id: 2, label: 'DUST STORM', detail: 'AUTO-SHIELD ON', icon: CloudFog, tone: '#fbbf24' },
+  { id: 3, label: 'TARGETED AI EDS CLEANSE', detail: 'WING RECOVERY', icon: ScanSearch, tone: '#22d3ee' },
+  { id: 4, label: 'SHIELD MALFUNCTION', detail: 'DISABLE DRILLS FAILSAFE', icon: ShieldAlert, tone: '#ef4444' },
 ];
 
 export function ScenarioBar() {

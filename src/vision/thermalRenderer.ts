@@ -115,7 +115,7 @@ function pixelTemp(m: PixelMap, p: number, s: ThermalInput): number {
     case Px.Cap:
       return 120 + 0.42 * (s.coreTemp - 120); // B4C shadow-shield cap occludes the core
     case Px.Flange:
-      return 0.72 * s.coreTemp;
+      return 0.5 * s.coreTemp; // insulated vessel flange
     case Px.Boom:
     case Px.Header:
       return s.wingTemps[w];

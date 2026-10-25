@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Detection } from '../simulation/physicsEngine';
 import { engine, getSnapshot, subscribe } from '../simulation/store';
-import { detectAnomaly } from '../vision/anomalyDetector';
+import { HOT_K, detectAnomaly } from '../vision/anomalyDetector';
 import { LUT, T_MAX, T_MIN, tempToIndex } from '../vision/ironbow';
 import { THERMAL_H, THERMAL_W, renderThermalFrame } from '../vision/thermalRenderer';
 import { Panel } from './Panel';
@@ -39,8 +39,8 @@ function drawOverlay(ctx: CanvasRenderingContext2D, det: Detection | null, maxT:
   ctx.fillStyle = '#fff';
   ctx.fillText('920K', bx - 2 * K, by0 - 2 * K);
   ctx.fillStyle = NEON;
-  ctx.fillText('AI 690K', bx - 2 * K, yFor(690) - 4 * K);
-  ctx.fillRect(bx - 1 * K, yFor(690), 9 * K, K * 0.6);
+  ctx.fillText(`AI ${HOT_K}K`, bx - 2 * K, yFor(HOT_K) - 4 * K);
+  ctx.fillRect(bx - 1 * K, yFor(HOT_K), 9 * K, K * 0.6);
   ctx.fillStyle = '#fff';
   ctx.fillText('35°C', bx - 2 * K, yFor(308.15) - 4 * K);
   ctx.fillText('40K', bx - 2 * K, by1 - 8 * K);
@@ -99,7 +99,7 @@ function drawOverlay(ctx: CanvasRenderingContext2D, det: Detection | null, maxT:
   ctx.shadowBlur = 0;
 
   // Label above the box.
-  const text = `AI THERMAL ANOMALY: DUST ${det.confidence}%`;
+  const text = `AI THERMAL ANOMALY: DUST ${det.confidence}%${det.confidence >= 60 ? ' - CRITICAL' : ''}`;
   ctx.font = `700 ${9 * K}px ui-monospace, Consolas, monospace`;
   const tw = ctx.measureText(text).width;
   const lx = Math.min(Math.max(2 * K, rx), W - tw - 40 * K);
@@ -138,7 +138,7 @@ export function ThermalVisionPanel() {
       // Stage 3: HUD overlay.
       let maxT = 0;
       for (let i = 0; i < 4; i++) maxT = Math.max(maxT, s.wingTemps[i]);
-      drawOverlay(octx, det, Math.max(maxT, s.coreTemp * 0.72), frame, ms);
+      drawOverlay(octx, det, Math.max(maxT, s.coreTemp * 0.5), frame, ms);
     };
     run();
     return subscribe(run);

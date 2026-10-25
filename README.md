@@ -19,15 +19,16 @@ npm run build    # type-check + production bundle
 
 | URL | State |
 |-----|-------|
-| `/?scenario=1` | Nominal baseline — 40.0 kWe, ≈410 K |
-| `/?scenario=2` | Lander dust crisis — wing 0 fouled 89 %, core climbs to ≈920 K, Stirling throttles to 24.5 kWe |
-| `/?scenario=3` | Autonomous protection — mesh net + CV-targeted EDS pulse + survival triage |
-| `/?scenario=4` | Siting hazard — habitat in unshielded line of sight (press **Auto-Optimize Siting** to fix) |
+The four scenarios tell one defense-in-depth story:
 
-**In the 3D viewport:**
-- Drag the reactor to re-site it.
-- Shift-drag to aim the B₄C shadow shield, or use the shield slider.
-- Use the dust slider in the header to set any fouling level live.
+| URL | State |
+|-----|-------|
+| `/?scenario=1` | Nominal baseline — 40.0 kWe, ≈411 K, net on standby, ice drills spinning at 16.0 kW |
+| `/?scenario=2` | Dust storm — mesh net auto-engages, wing 0 fouls to only ≈29 %, power dips to ≈36.5 kWe |
+| `/?scenario=3` | Targeted AI EDS cleanse — the thermal-vision box targets wing 0, dust 29 % → 2 %, 40.0 kWe restored |
+| `/?scenario=4` | Shield malfunction — net offline, 89 % fouling, ≈920 K, throttle to 24.5 kWe, ice drills disabled so crew loads stay 100 % |
+
+In scenario 4 the right-hand button becomes **Emergency backup EDS + restore triage**. The dust slider in the header sets any wing 0 fouling level live.
 
 ## Architecture
 

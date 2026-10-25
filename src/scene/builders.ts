@@ -238,55 +238,78 @@ export function buildNet(): NetParts {
   return { group, wireMat, shellMat, ringMat };
 }
 
-/** Unit cone with apex at the origin opening along +Z to z = 1. */
-export function unitCone(): THREE.BufferGeometry {
-  const g = new THREE.ConeGeometry(1, 1, 32, 1, true);
-  g.translate(0, -0.5, 0);
-  g.rotateX(-Math.PI / 2);
-  return g;
-}
-
-export function coneMaterial(color: number) {
-  return new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.2,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
-}
-
-/** Thin flat ring of 36 dose sectors in reactor-local coordinates. */
-export function buildDoseRing(sectors: number, inner: number, outer: number): THREE.Mesh {
-  const pos: number[] = [];
-  const col: number[] = [];
-  const gap = 0.03;
-  for (let i = 0; i < sectors; i++) {
-    const a0 = (i / sectors) * Math.PI * 2 + gap;
-    const a1 = ((i + 1) / sectors) * Math.PI * 2 - gap;
-    // azimuth a → (sin a, −cos a)
-    const p = (r: number, a: number) => [Math.sin(a) * r, 0, -Math.cos(a) * r];
-    const v = [p(inner, a0), p(outer, a0), p(outer, a1), p(inner, a1)];
-    for (const idx of [0, 1, 2, 0, 2, 3]) {
-      pos.push(...v[idx]);
-      col.push(0, 1, 0.5);
-    }
+/** Helix centreline for the auger flight. */
+class Helix extends THREE.Curve<THREE.Vector3> {
+  constructor(private radius: number, private y0: number, private y1: number, private turns: number) {
+    super();
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  return new THREE.Mesh(
-    geo,
-    new THREE.MeshBasicMaterial({
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.6,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      toneMapped: false,
-    }),
-  );
+  getPoint(t: number, target = new THREE.Vector3()) {
+    const a = t * this.turns * Math.PI * 2;
+    return target.set(Math.cos(a) * this.radius, this.y0 + (this.y1 - this.y0) * t, Math.sin(a) * this.radius);
+  }
+}
+
+export interface DrillParts {
+  group: THREE.Group;
+  auger: THREE.Group;
+  augerMat: THREE.MeshStandardMaterial;
+  beaconMat: THREE.MeshBasicMaterial;
+  beaconLight: THREE.PointLight;
+}
+
+/** Lunar ice-mining (ISRU) rig: skid, tripod derrick, drive head and a rotating auger. */
+export function buildDrillRig(): DrillParts {
+  const group = new THREE.Group();
+  const dark = metal(0x3a4048, 0.6, 0.7);
+  const steel = metal(0x9aa3ad, 0.35, 0.9);
+
+  const skid = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.35, 2.8), dark);
+  skid.position.y = 0.17;
+  skid.castShadow = skid.receiveShadow = true;
+  group.add(skid);
+
+  const apex = new THREE.Vector3(0, 5.2, 0);
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const foot = new THREE.Vector3(Math.cos(a) * 1.45, 0.3, Math.sin(a) * 1.45);
+    const dir = apex.clone().sub(foot);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, dir.length(), 8), steel);
+    leg.position.copy(foot).addScaledVector(dir, 0.5);
+    leg.quaternion.setFromUnitVectors(up, dir.normalize());
+    leg.castShadow = true;
+    group.add(leg);
+  }
+  for (const [y, r] of [
+    [1.7, 1.0],
+    [3.3, 0.55],
+  ]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.045, 6, 24).rotateX(Math.PI / 2), steel);
+    ring.position.y = y;
+    group.add(ring);
+  }
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.8, 0.95), metal(0xc9971c, 0.45, 0.6));
+  head.position.y = 4.55;
+  head.castShadow = true;
+  group.add(head);
+
+  const augerMat = new THREE.MeshStandardMaterial({ color: 0x5b6b7a, emissive: 0x2dd4bf, emissiveIntensity: 1, roughness: 0.35, metalness: 0.8 });
+  const auger = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 4.8, 10), steel);
+  shaft.position.y = 1.9;
+  auger.add(shaft);
+  const flight = new THREE.Mesh(new THREE.TubeGeometry(new Helix(0.3, -0.4, 3.6, 7), 160, 0.07, 6, false), augerMat);
+  flight.castShadow = true;
+  auger.add(flight);
+  group.add(auger);
+
+  const beaconMat = new THREE.MeshBasicMaterial({ color: 0x22ff88, toneMapped: false });
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 12), beaconMat);
+  beacon.position.y = 5.5;
+  group.add(beacon);
+  const beaconLight = new THREE.PointLight(0x22ff88, 6, 9, 1.6);
+  beaconLight.position.y = 5.5;
+  group.add(beaconLight);
+
+  return { group, auger, augerMat, beaconMat, beaconLight };
 }

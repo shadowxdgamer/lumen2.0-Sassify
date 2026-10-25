@@ -10,6 +10,10 @@ export const P_E_THROTTLED = 24_500; // protective throttle output [W]
 export const THROTTLE_ON_K = 750; // core temp that triggers throttle [K]
 export const THROTTLE_OFF_K = 650; // core temp that restores full output [K]
 export const P_E_RAMP = 6_000; // converter ramp rate [W per wall-second]
+// Below the throttle point, output derates as the rejection side warms and the
+// converters' Carnot margin shrinks (linearised about the nominal operating point).
+export const STIRLING_T_REF = 411.5; // nominal rejection-side temperature [K]
+export const STIRLING_DERATE = 18.5; // output lost per kelvin above T_REF [W/K]
 
 // --- Radiators & thermal network --------------------------------------------
 export const WING_COUNT = 4;
@@ -35,12 +39,16 @@ export const SUBSTEPS = 20;
 
 // --- Dust & electrostatic defense -------------------------------------------
 export const NET_DEFLECTION = 0.85;
-export const PLUME_RATE = 0.45; // fouling fraction per wall-second during plume
 export const EDS_RATE = (0.89 - 0.02) / 6; // ≈ 0.145 /s → 89 % to 2 % in 6 s
 export const EDS_TARGET_DUST = 0.02;
 export const NOMINAL_DUST = 0.02;
-/** Post-plume fouling per wing (wing 0 faces the landing pad). */
-export const CRISIS_DUST: readonly number[] = [0.89, 0.02, 0.02, 0.02];
+export const STORM_DUST_UNSHIELDED = 0.89; // wing 0 fouling if the storm lands unopposed
+export const PLUME_DURATION = 4; // wall seconds of inbound ejecta
+/**
+ * Poisson coverage: D = 1 − (1 − D₀)·e^(−k·m). The storm's total dose k·M on wing 0
+ * is calibrated so an unshielded storm gives 89 %; the net's 85 % deflection leaves ≈ 29 %.
+ */
+export const STORM_DOSE_WING0 = Math.log((1 - NOMINAL_DUST) / (1 - STORM_DUST_UNSHIELDED));
 
 // --- Radiation & siting ------------------------------------------------------
 export const WORLD_SCALE = 10; // metres per scene unit
@@ -53,14 +61,10 @@ export const SECTOR_COUNT = 36;
 export const CORE_HEIGHT = 2.2; // core centre above ground [units]
 
 // --- Micro-grid --------------------------------------------------------------
-export const LOAD_NOMINAL = { life: 10_000, comms: 5_000, habitatBase: 3_000, heater: 6_000, science: 16_000 };
+export const LOAD_NOMINAL = { life: 10_000, comms: 5_000, habitatBase: 3_000, heater: 6_000, drills: 16_000 };
 export const LIFE_FLOOR = 8_000;
 export const COMMS_FLOOR = 1_500;
-export const COMMS_ESSENTIAL = 3_000; // auto-triage cap: DSN relay + crew voice only
-export const HABITAT_BASE_ECO = 2_000;
-export const PIPE_U = 22; // pipe heat-loss conductance [W/K]
 export const PIPE_T_ENV = 90; // buried pipe environment [K]
+export const PIPE_U = LOAD_NOMINAL.heater / (292 - PIPE_T_ENV); // fully-funded heaters hold 292 K [W/K]
 export const PIPE_C = 1.2e5; // pipe-loop capacitance [J/K]
 export const FREEZE_K = 273.15;
-export const PIPE_BAND_NORMAL: readonly [number, number] = [288, 293];
-export const PIPE_BAND_ECO: readonly [number, number] = [278, 283];

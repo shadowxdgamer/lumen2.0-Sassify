@@ -20,7 +20,7 @@
 
 1. **Thermal choking.** Dust lowers radiator emissivity and, worse, forms an insulating blanket. Lunar regolith has a thermal conductivity of about **1.5 × 10⁻³ W/m·K**, one of the best insulators in the solar system. The NaK coolant loop of a fouled wing cannot dump heat, so core temperature climbs.
 2. **Power collapse.** Above about 750 K at the rejection interface, the free-piston Stirling converters lose their Carnot margin and must be throttled to avoid seizing (40 → 24.5 kWe). A 40 kW base suddenly has 24.5 kW.
-3. **Survival cascade.** With naive proportional brown-out, life support drops below its safety floor. Habitat water-line heaters fall behind, and the pipes freeze at 273.15 K within hours. A burst line in a lunar habitat is a mission-ending event.
+3. **Survival cascade.** Without triage, a power shortfall is shared out across every load, so life support and the habitat water-line heaters fall below safe levels. The pipes freeze at 273.15 K within hours, and a burst line in a lunar habitat is a mission-ending event.
 4. **Radiation siting.** Every time crews relocate or extend the reactor, its directional B₄C shadow shield and the crater terrain must still keep the habitat below **5 rem/yr**. That is a 3-D occlusion problem nobody wants to solve by hand at 3 a.m.
 5. **Latency.** Earth is 1.3 light-seconds away and ground-team staffing is limited. Lunar night shifts need *autonomous* detection and response.
 
@@ -36,15 +36,18 @@
 | Mission planners / landing ops | Plume-exclusion and siting decisions (where to land, where to put the reactor). |
 | Agencies & commercial operators (SaaS customers) | Multi-site fleet monitoring as more lunar power plants come online. |
 
-## 4. The Solution
+## 4. The Solution — one "Defense-in-Depth" story
 
-A digital twin plus a closed-loop autonomy stack: **Detect → Protect → Clean → Survive → Plan.**
+A digital twin plus a closed-loop autonomy stack. Each demo scenario adds one layer of defense:
 
-1. **Detect:** a synthetic LWIR mast camera plus a deterministic computer-vision pipeline finds the overheating wing from pixels and estimates its dust fraction.
-2. **Protect:** an electrostatic mesh-net dome deflects 85 % of incoming charged dust.
-3. **Clean:** a 3-phase EDS travelling-wave pulse fires **only on the wing the detector located**, sweeping D₀ from 89 % to 2 % in about 6 s.
-4. **Survive:** priority-based power triage under the throttled budget sheds science, keeps comms essential, duty-cycles habitat heaters above 273.15 K, and floors life support.
-5. **Plan:** drag the reactor, rotate the B₄C shield, raycast 36 sectors plus the habitat vector, and auto-optimize the siting.
+| # | Scenario | Layer shown |
+|---|----------|-------------|
+| 1 | **Nominal baseline** — 40.0 kWe, 411 K, net on standby, 3 ice-drill rigs spinning at 16.0 kW | Normal ISRU mining operations |
+| 2 | **Dust storm (auto-shield on)** — perimeter sensors trip and the electrostatic mesh net engages automatically. It deflects 85 %, so wing 0 fouls to only ≈ 29 % and power dips to ≈ 36.5 kWe. The drills slow but keep running. | **Protect** |
+| 3 | **Targeted AI EDS cleanse** — the thermal-vision bounding box locates the warm wing. A 3-phase EDS pulse fires **only on that wing**, taking dust from 29 % to 2 % in about 2 s. ε recovers to 0.89 and power returns to 40.0 kWe. | **Detect + Clean** |
+| 4 | **Shield malfunction (disable-drills failsafe)** — a micrometeoroid fault takes the net offline in the middle of a heavy plume. Wing 0 fouls to 89 % (ε 0.42), the core reaches ≈ 920 K and the converters throttle to 24.5 kWe. **Failsafe triage disables the ice drills (0.0 kW)** so life support (10), habitat heaters (9) and comms (5) stay 100 % funded. The CTA becomes **Emergency backup EDS + restore triage**: wing-mounted electrodes clean the wing, the core cools, power returns and the drills restart automatically. | **Survive** |
+
+The radiation-siting model (B₄C shadow shield + terrain raycast, §5.4) is still in the engine and unit-tested. It is deliberately hidden from the pitch view so the jury follows one physics story; use it in Q&A if asked about siting.
 
 ---
 
@@ -57,6 +60,7 @@ A digital twin plus a closed-loop autonomy stack: **Detect → Protect → Clean
 | σ | 5.670374 × 10⁻⁸ W/m²K⁴ | Stefan–Boltzmann |
 | P_th | 175 kWt | FSP-class core (40 kWe at ~23 % Stirling efficiency) |
 | P_e (nominal / throttled) | 40.0 / 24.5 kWe | FSP target / protective throttle |
+| Converter derating | −18.5 W per K above 411.5 K (floor 24.5 kWe) | Linearised Carnot-margin loss as the rejection side warms |
 | T_sink | 40 K | Lunar night effective sink (polar) |
 | A_i | 42 m² per wing, 4 wings | 168 m² total radiator |
 | ε(D) | 0.90 − 0.54·D | Linear dust degradation (clean ε 0.90; ε(0.89) = **0.42**, ε(0.02) = **0.89**) |
@@ -89,17 +93,22 @@ P_rad,i         = ε_i(D_i) · σ · A_i · (T_s,i⁴ − T_sink⁴)
 
 | Case | D | P_e | CORE | ε (worst wing) |
 |------|---|-----|------|----------------|
-| Nominal | 0.02 × 4 | 40.0 kWe | ≈ 410 K | 0.89 |
-| Dust crisis | 0.89 / 0.02 / 0.02 / 0.02 | 24.5 kWe | ≈ 920 K | 0.42 |
+| [1] Nominal | 0.02 × 4 | 40.0 kWe | ≈ 411 K | 0.89 |
+| [2] Storm, net on | 0.29 on wing 0 | ≈ 36.5 kWe | ≈ 600 K | 0.74 |
+| [4] Storm, net faulted | 0.89 on wing 0 | 24.5 kWe (throttled) | ≈ 920 K | 0.42 |
 
 ### 5.3 Dust dynamics
 
+A lander plume delivers a fixed dust "dose" to wing 0 over 4 s. Coverage follows a Poisson model, so a second layer of dust lands partly on the first:
+
 ```
-dD_i/dt = plumeRate · (1 − 0.85·netOn) · exposure_i     (until the plume deposit target is reached)
-        − EDS_rate · [i = target wing from the CV detector]
+D(t+Δt) = 1 − (1 − D(t)) · exp(−k·Δm),   Δm = (M / 4 s) · Δt · (1 − 0.85·netOn)
+k·M = ln((1 − 0.02) / (1 − 0.89)) = 2.19      → unshielded storm: 2 % → 89 %
+                                               → net up (15 % lands): 2 % → 29 %
+dD/dt (EDS) = −0.145 /s on the CV-targeted wing only
 ```
 
-The EDS rate is 0.145 /s, which clears 0.89 to 0.02 in about 6 s. The pulse is *gated* on the CV lock, so the cleaning really does depend on the vision output.
+The pulse is *gated* on the CV lock, so the cleaning really does depend on the vision output.
 
 ### 5.4 Radiation, siting & raycast occlusion
 
@@ -109,17 +118,18 @@ The EDS rate is 0.145 /s, which clears 0.89 to 0.02 in about 6 s. The pulse is *
 * `I = I₀ · S(Δθ) / d² · e^(−μ·x)` gives the dose in rem/yr. The habitat cone is green when I < 5 rem/yr and red otherwise; a breach logs a radiation warning.
 * **Auto-Optimize Siting:** a grid search over crater-floor positions (r ≤ 10). The shield points at the habitat azimuth, which is analytically optimal. The objective is habitat dose plus a small cable-length penalty.
 
-### 5.5 Stirling throttle & survival micro-grid
+### 5.5 Stirling output & survival micro-grid
 
-* Nominal demand: Life 10, Comms 5, Habitat 3 + 6 kW heater (thermostat), Science 16.
-* Pipe thermal model: `C_p dT/dt = P_heater − U·(T − 90 K)`, with U = 22 W/K. The heater uses bang-bang hysteresis: 288–293 K normally, 278–283 K in ECO triage.
-* **Without triage** (proportional brown-out at 24.5 kWe), life support falls below its 8 kW floor. The heater gets only 61 %, so the pipe equilibrium sits **below 273.15 K** and the line freezes. This is the failure we prevent.
-* **With autonomous triage**, power is allocated in strict priority order:
-  1. Life support (floor 8 kW; cannot be overridden by the manual sliders)
-  2. Habitat freeze protection (ECO duty cycle)
-  3. Comms (held to 3 kW essential links when short; floor 1.5 kW)
-  4. Science gets the remainder (shed first).
-* Manual sliders set *requests*. Interlocks clamp them and log the event.
+* Converter output: `P_e = clamp(40 kWe − 18.5 W/K · (T_core − 411.5 K), 24.5, 40)`. Above 750 K the protective throttle holds 24.5 kWe until the core falls below 650 K (hysteresis).
+* Nominal demand: Life 10, Habitat 9 (3 cabin + 6 water-line heaters), Comms 5, Ice drills 16 = 40 kWe.
+* Pipe model: `C_p dT/dt = P_heater − U·(T − 90 K)` with U = 29.7 W/K, so fully funded heaters hold the line at 292 K.
+* Allocation is always in strict priority order:
+  1. Life support (8 kW interlocked floor)
+  2. Habitat incl. heaters
+  3. Comms (1.5 kW floor)
+  4. Ice drills get the remainder. They are variable-speed augers, so in scenario 2 they run at ≈ 12.5 kW.
+* **FAILSAFE PRIORITY** (whenever the protective throttle is engaged): the drills are switched off entirely. 10 + 9 + 5 = 24 kW is funded inside the 24.5 kWe budget, and the water line never approaches 273.15 K.
+* Manual-override sliders set *requests*. Interlocks clamp them and log the event.
 
 ---
 
@@ -130,9 +140,9 @@ The EDS rate is 0.145 /s, which clears 0.89 to 0.02 in about 6 s. The pulse is *
 | Stage | Implementation |
 |-------|----------------|
 | 1. Sensor synthesis | A 260 × 170 overhead mast-camera view is rendered per pixel from physical temperatures: regolith background, shield cap, NaK manifold/risers at T_w, panel face at T_s/T_w depending on a seeded dust-blotch mask thresholded by D_i, and Box–Muller Gaussian sensor noise (σ ≈ 5 K). Each temperature passes through an Ironbow LUT (40 K → 920 K) and is written with `putImageData`. |
-| 2. Detection | `getImageData` reads the pixels back. Threshold **R > 220 ∧ G > 130** (about 690 K), apply a 3 × 3 dilation, run BFS 4-connected component labelling, and keep the largest component. The result gives bbox, centroid, area ratio and wing index (from the centroid azimuth). |
+| 2. Detection | `getImageData` reads the pixels back, and each pixel is decoded radiometrically (O(1) palette lookup) to kelvin. Threshold **T > 470 K**: healthy wings run at 370–400 K, so this flags a heat-rejection anomaly from about 15 % fouling upward. Then apply a 3 × 3 dilation, run BFS 4-connected component labelling, and keep the largest component. The result gives bbox, centroid, area ratio and wing index (from the centroid azimuth). |
 | 2b. Physics-informed inversion | The component's pixels are decoded back to temperature through the LUT (nearest colour), and the 90th percentile gives T_meas. Bisection then solves `T_s(D,Q) + Q·D·R_dust = T_meas` for D, using the loop heat-meter telemetry Q. **Confidence = min(99, round(D̂·100))**, an image-derived estimate, not the ground-truth variable. |
-| 3. HUD | Neon bbox, crosshair, colorbar and the `AI THERMAL ANOMALY: DUST xx%` label are drawn over the detected coordinates. |
+| 3. HUD | Neon bbox, crosshair, colorbar and the `AI THERMAL ANOMALY: DUST xx%` label (with a `- CRITICAL` suffix at ≥ 60 %) are drawn over the detected coordinates. Measured: scenario 2 → 29 %, scenario 4 → 89 %. |
 
 **Coupling:** the detection result goes back into the physics engine, and the EDS pulse will only fire on the wing the detector located.
 **Production path:** the same interface accepts a real LWIR camera frame. A learned segmenter (U-Net) could replace stage 2 once real fouling imagery exists.
@@ -162,19 +172,21 @@ The EDS rate is 0.145 /s, which clears 0.89 to 0.02 in about 6 s. The pulse is *
 
 | Time | Beat | On screen |
 |------|------|-----------|
-| 0:00–0:40 | **Future:** "By 2030 the first nuclear reactor will be running on the Moon…" | Scenario 1: nominal 40.0 kWe, 410 K |
-| 0:40–1:20 | **Problem:** a lander touches down 300 m away and the plume coats a radiator wing. | Click **[2] DUST CRISIS**: dust particles, wing 0 glows, core climbs past 750 K, power throttles to 24.5 kWe, log turns red |
-| 1:20–1:50 | **Users:** the crew asleep in the habitat, pipes 30 minutes from freezing. | Point at freeze margin and brown-out warnings |
-| 1:50–3:20 | **Solution + Tech:** "Our thermal vision found it from pixels alone." | Bounding box `DUST 89%`. Click **ENGAGE**: dome deploys with arcs, EDS sweeps 89 → 2 %, core cools, triage sheds science and keeps life support |
-| 3:20–4:10 | **Siting:** "And when you move the reactor…" | Click **[4] SITING HAZARD**: habitat cone turns red. Click **Auto-Optimize**: it turns green |
-| 4:10–5:00 | **Impact:** autonomy where Earth can't help; SaaS for every lunar power plant. | Back to nominal |
-| Q&A | Judges drive the **dust slider** and drag the reactor live. | |
+| 0:00–0:40 | **Future:** "By 2030 the first reactor runs on the Moon, powering the habitat *and* the ice mines that make water and oxygen." | **[1] Nominal**: 40.0 kWe, drills spinning |
+| 0:40–1:30 | **Problem + layer 1:** "A lander touches down and blasts dust at the radiators." | **[2] Dust storm**: the net auto-engages with sparks. Only 29 % sticks, the thermal box reads `DUST 29%`, and power dips to 36.5 kWe |
+| 1:30–2:20 | **Layer 2:** "Our vision found the warm wing from pixels alone, so we clean just that wing." | **[3] Targeted EDS**: 29 → 2 %, the box clears, power is back to 40.0 kWe |
+| 2:20–3:40 | **Layer 3 + users:** "Now the worst case: the shield itself fails mid-storm." | **[4] Shield malfunction**: the net flickers red and drops out. 89 % dust, 920 K, throttle to 24.5 kWe, **drills stop**, while life support, heaters and comms stay at 100 % |
+| 3:40–4:20 | **Recovery:** "The operator has one button." | Click **Emergency backup EDS + restore triage**. The wing cleans, the core cools and the drills restart |
+| 4:20–5:00 | **Impact:** autonomy where Earth can't help; SaaS for every lunar power plant. | Back to nominal |
+| Q&A | Judges drive the **dust slider** and the manual-override sliders. | |
 
 ## 9. Q&A Defense Bank
 
 * **Why does a dusty radiator get *hotter*?** Dust both lowers ε and adds an insulating blanket (k ≈ 1.5 × 10⁻³ W/m·K). The manifold behind it must reach a higher temperature to push the same heat through, and the segmented loop can't redistribute much (G_x = 15 W/K).
 * **Why not just use the other 3 wings?** Each wing has an independent loop for puncture tolerance, and lateral core conduction is weak. That is realistic, and it is also why one fouled wing is dangerous.
-* **Why throttle the Stirling?** Stirling efficiency scales with (1 − T_cold/T_hot). As the rejection side heats up, the margin collapses and the pistons/regenerator risk damage, so protection cuts output to 24.5 kWe.
+* **Why does power dip in scenario 2 but crash in scenario 4?** Stirling efficiency scales with (1 − T_cold/T_hot). A warmer rejection side gradually costs output (linearised at 18.5 W/K → 36.5 kWe at ≈ 600 K). Above 750 K the pistons/regenerator risk damage, so protection cuts output to 24.5 kWe.
+* **Why shed the drills, not comms?** Ice mining is deferrable: water-ice stockpiles cover days. Losing life support, frozen water lines or the Earth link is not deferrable. Variable-speed augers also make the drills the natural shock absorber in scenario 2.
+* **Why 29 % and not 15 %?** Coverage is Poisson. The net cuts the arriving dust to 15 %, and 1 − 0.98·e^(−0.15·2.19) ≈ 0.29.
 * **Is 920 K a real number?** It is a calibrated lumped-parameter result (two-point calibration, asserted in tests), not CFD. We state that openly.
 * **How does the raycast work?** `THREE.Raycaster` hits a DoubleSide terrain mesh. Sorted hits alternate entry/exit, the thickness is the sum of the inside segments, and it is multiplied by 10 m/unit.
 * **Why μ = 0.6 m⁻¹?** It is deliberately conservative: it underestimates attenuation, so it overestimates dose. A safety tool should err on the safe side.

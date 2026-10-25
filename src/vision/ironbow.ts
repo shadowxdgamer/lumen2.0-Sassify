@@ -57,6 +57,14 @@ export function decodeTemp(r: number, g: number, b: number): number {
   return indexToTemp(best);
 }
 
+const exact = new Map<number, number>();
+for (let i = 255; i >= 0; i--) exact.set((LUT[i * 3] << 16) | (LUT[i * 3 + 1] << 8) | LUT[i * 3 + 2], indexToTemp(i));
+
+/** Radiometric decode: O(1) for palette colours, nearest-colour search otherwise. */
+export function pixelTemp(r: number, g: number, b: number): number {
+  return exact.get((r << 16) | (g << 8) | b) ?? decodeTemp(r, g, b);
+}
+
 export function cssColorForTemp(t: number): string {
   const i = tempToIndex(t) * 3;
   return `rgb(${LUT[i]},${LUT[i + 1]},${LUT[i + 2]})`;

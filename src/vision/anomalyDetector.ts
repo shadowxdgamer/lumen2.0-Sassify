@@ -1,22 +1,24 @@
 import type { Detection } from '../simulation/physicsEngine';
 import { invertDust } from '../simulation/thermal';
-import { decodeTemp } from './ironbow';
+import { pixelTemp } from './ironbow';
 import { CAM_CX, CAM_CY, wingAzimuth } from './thermalRenderer';
 
 // Stage 2 — classical computer vision on the raw RGBA buffer:
-// colour threshold → 3×3 dilation → BFS 4-connected components → largest blob
-// → bbox / centroid / wing → physics-informed dust inversion.
+// radiometric decode → temperature threshold → 3×3 dilation → BFS 4-connected
+// components → largest blob → bbox / centroid / wing → physics-informed dust inversion.
 
-export const HOT_R = 220;
-export const HOT_G = 130;
+/** Healthy wings run ≈ 370–400 K; anything above this is a heat-rejection anomaly. */
+export const HOT_K = 470;
 const MIN_PIXELS = 25;
 
 export function detectAnomaly(data: Uint8ClampedArray, w: number, h: number, qLoop: number[]): Detection | null {
   const n = w * h;
+  const temp = new Float32Array(n);
   const hot = new Uint8Array(n);
   let any = 0;
   for (let p = 0; p < n; p++) {
-    if (data[p * 4] > HOT_R && data[p * 4 + 1] > HOT_G) {
+    temp[p] = pixelTemp(data[p * 4], data[p * 4 + 1], data[p * 4 + 2]);
+    if (temp[p] > HOT_K) {
       hot[p] = 1;
       any++;
     }
@@ -83,7 +85,7 @@ export function detectAnomaly(data: Uint8ClampedArray, w: number, h: number, qLo
     sx += x;
     sy += y;
     count++;
-    temps.push(decodeTemp(data[p * 4], data[p * 4 + 1], data[p * 4 + 2]));
+    temps.push(temp[p]);
   }
   if (count < MIN_PIXELS) return null;
   temps.sort((a, b) => a - b);

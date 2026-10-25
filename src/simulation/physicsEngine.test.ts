@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { detectAnomaly } from '../vision/anomalyDetector';
 import { THERMAL_H, THERMAL_W, renderThermalFrame } from '../vision/thermalRenderer';
-import { FREEZE_K, LIFE_FLOOR, emissivity } from './constants';
+import { FREEZE_K, emissivity } from './constants';
 import { PhysicsEngine, type SimSnapshot } from './physicsEngine';
 
+const buf = new Uint8ClampedArray(THERMAL_W * THERMAL_H * 4);
+
+/** Steps the engine for `seconds` of wall time, optionally running the vision pipeline each tick. */
 function run(e: PhysicsEngine, seconds: number, withVision = false) {
-  const buf = new Uint8ClampedArray(THERMAL_W * THERMAL_H * 4);
   for (let i = 0; i < seconds * 10; i++) {
     e.step(0.1);
     if (withVision) {
@@ -17,7 +19,13 @@ function run(e: PhysicsEngine, seconds: number, withVision = false) {
   return e.snapshot();
 }
 
+function detect(s: SimSnapshot) {
+  renderThermalFrame(buf, s, 3);
+  return detectAnomaly(buf, THERMAL_W, THERMAL_H, s.qLoop);
+}
+
 const worstEps = (s: SimSnapshot) => Math.min(...s.emissivity);
+const kW = (w: number) => w / 1000;
 
 describe('emissivity model', () => {
   it('matches the locked calibration points', () => {
@@ -26,109 +34,118 @@ describe('emissivity model', () => {
   });
 });
 
-describe('PhysicsEngine thermal calibration', () => {
-  it('nominal baseline ≈ 410 K / 40.0 kWe / ε 0.89', () => {
+describe('[1] nominal baseline', () => {
+  it('runs at ≈ 411 K / 40.0 kWe with drills spinning and the net on standby', () => {
     const s = run(new PhysicsEngine(), 5);
-    expect(s.coreTemp).toBeGreaterThan(400);
-    expect(s.coreTemp).toBeLessThan(420);
-    expect(s.pe).toBeCloseTo(40_000, -2);
+    expect(s.coreTemp).toBeGreaterThan(405);
+    expect(s.coreTemp).toBeLessThan(418);
+    expect(kW(s.pe)).toBeCloseTo(40, 1);
     expect(worstEps(s)).toBeCloseTo(0.89, 2);
+    expect(s.netOn).toBe(false);
+    expect(kW(s.triage.alloc.drills)).toBeCloseTo(16, 1);
+    expect(kW(s.triage.alloc.life)).toBeCloseTo(10, 1);
+    expect(kW(s.triage.alloc.habitat)).toBeCloseTo(9, 1);
+    expect(kW(s.triage.alloc.comms)).toBeCloseTo(5, 1);
     expect(s.status).toBe('NOMINAL');
-  });
-
-  it('dust crisis climbs to ≈ 920 K and throttles to 24.5 kWe', () => {
-    const e = new PhysicsEngine();
-    e.applyScenario(2);
-    const s = run(e, 40);
-    expect(s.dust[0]).toBeCloseTo(0.89, 2);
-    expect(worstEps(s)).toBeCloseTo(0.42, 2);
-    expect(s.throttled).toBe(true);
-    expect(s.pe).toBeCloseTo(24_500, -2);
-    expect(s.coreTemp).toBeGreaterThan(905);
-    expect(s.coreTemp).toBeLessThan(935);
-    expect(s.status).toBe('CRITICAL');
-  });
-
-  it('proportional brown-out without triage violates the life-support floor', () => {
-    const e = new PhysicsEngine();
-    e.applyScenario(2);
-    const s = run(e, 30);
-    expect(s.triage.brownout).toBe(true);
-    expect(s.triage.alloc.life).toBeLessThan(LIFE_FLOOR);
+    expect(detect(s)).toBeNull();
   });
 });
 
-describe('thermal vision detector', () => {
-  it('finds no anomaly in the nominal frame', () => {
-    const e = new PhysicsEngine();
-    const s = run(e, 2);
-    const buf = new Uint8ClampedArray(THERMAL_W * THERMAL_H * 4);
-    renderThermalFrame(buf, s, 1);
-    expect(detectAnomaly(buf, THERMAL_W, THERMAL_H, s.qLoop)).toBeNull();
-  });
-
-  it('locks onto wing 0 with ≈ 89 % dust confidence during the crisis', () => {
+describe('[2] dust storm with auto-shield', () => {
+  it('auto-engages the net, which holds wing 0 to ≈ 29 % and power to ≈ 36.5 kWe', () => {
     const e = new PhysicsEngine();
     e.applyScenario(2);
+    expect(e.snapshot().netOn).toBe(true);
     const s = run(e, 40);
-    const buf = new Uint8ClampedArray(THERMAL_W * THERMAL_H * 4);
-    renderThermalFrame(buf, s, 3);
-    const det = detectAnomaly(buf, THERMAL_W, THERMAL_H, s.qLoop);
-    expect(det).not.toBeNull();
-    expect(det!.wing).toBe(0);
-    expect(det!.confidence).toBeGreaterThanOrEqual(85);
-    expect(det!.confidence).toBeLessThanOrEqual(93);
-    // Wing 0 points south-west → lower-left of the camera frame.
-    expect(det!.centroid[0]).toBeLessThan(130);
-    expect(det!.centroid[1]).toBeGreaterThan(86);
+    expect(s.dust[0]).toBeGreaterThan(0.27);
+    expect(s.dust[0]).toBeLessThan(0.31);
+    expect(kW(s.pe)).toBeGreaterThan(35.5);
+    expect(kW(s.pe)).toBeLessThan(37.5);
+    expect(s.throttled).toBe(false);
+    expect(kW(s.triage.alloc.life)).toBeCloseTo(10, 1);
+    expect(s.triage.alloc.drills).toBeGreaterThan(0);
+    const det = detect(s);
+    expect(det?.wing).toBe(0);
+    expect(det!.confidence).toBeGreaterThanOrEqual(25);
+    expect(det!.confidence).toBeLessThanOrEqual(33);
   });
 });
 
-describe('autonomous protection', () => {
-  it('EDS (gated on CV lock) clears wing 0, core recovers, triage keeps crew safe', () => {
+describe('[3] targeted AI EDS cleanse', () => {
+  it('fires on the CV-located wing, clears dust and restores 40.0 kWe', () => {
     const e = new PhysicsEngine();
     e.applyScenario(2);
-    run(e, 40, true);
-    e.engageProtection();
-    const mid = run(e, 7, true);
-    expect(mid.netOn).toBe(true);
-    expect(mid.dust[0]).toBeLessThanOrEqual(0.021);
-    expect(mid.triage.alloc.life).toBeGreaterThanOrEqual(LIFE_FLOOR);
-    const total = mid.triage.alloc.life + mid.triage.alloc.comms + mid.triage.alloc.habitat + mid.triage.alloc.science;
-    expect(total).toBeLessThanOrEqual(mid.pe + 1);
-    const end = run(e, 40, true);
-    expect(end.coreTemp).toBeLessThan(420);
-    expect(end.throttled).toBe(false);
-    expect(end.pipeTemp).toBeGreaterThan(FREEZE_K);
-    expect(worstEps(end)).toBeGreaterThan(0.88);
+    run(e, 30, true);
+    e.applyScenario(3);
+    const s = run(e, 25, true);
+    expect(s.netOn).toBe(true);
+    expect(s.dust[0]).toBeLessThanOrEqual(0.021);
+    expect(worstEps(s)).toBeGreaterThan(0.88);
+    expect(kW(s.pe)).toBeGreaterThan(39.8);
+    expect(s.detection).toBeNull();
   }, 30_000);
 
-  it('EDS does not fire without a vision lock', () => {
+  it('preloads the post-storm state when started directly, and does not fire without a lock', () => {
     const e = new PhysicsEngine();
-    e.applyScenario(2);
-    run(e, 30); // no vision pipeline
-    e.engageProtection();
-    const s = run(e, 6);
-    expect(s.dust[0]).toBeGreaterThan(0.85);
+    e.applyScenario(3);
+    expect(e.snapshot().dust[0]).toBeGreaterThan(0.25);
+    const s = run(e, 3); // no vision pipeline → no lock → no pulse
+    expect(s.dust[0]).toBeGreaterThan(0.25);
+    expect(s.edsActive).toBe(false);
   });
 });
 
-describe('radiation siting', () => {
-  it('default siting keeps the habitat secure (< 5 rem/yr)', () => {
-    const s = new PhysicsEngine().snapshot();
-    expect(s.radiation.habitat.secure).toBe(true);
-    expect(s.radiation.habitat.dose).toBeLessThan(5);
-  });
-
-  it('siting hazard scenario exposes the habitat, auto-optimize fixes it', () => {
+describe('[4] shield malfunction failsafe', () => {
+  it('net offline → 89 % fouling, ≈ 920 K, 24.5 kWe, drills disabled, crew loads 100 %', () => {
     const e = new PhysicsEngine();
     e.applyScenario(4);
-    let s = e.snapshot();
-    expect(s.radiation.habitat.secure).toBe(false);
-    expect(s.radiation.hazardSectors.length).toBeGreaterThan(0);
+    const s = run(e, 40);
+    expect(s.netFault).toBe(true);
+    expect(s.netOn).toBe(false);
+    expect(s.dust[0]).toBeCloseTo(0.89, 2);
+    expect(worstEps(s)).toBeCloseTo(0.42, 2);
+    expect(s.coreTemp).toBeGreaterThan(905);
+    expect(s.coreTemp).toBeLessThan(935);
+    expect(s.throttled).toBe(true);
+    expect(kW(s.pe)).toBeCloseTo(24.5, 1);
+    expect(s.triage.failsafe).toBe(true);
+    expect(s.triage.alloc.drills).toBe(0);
+    expect(kW(s.triage.alloc.life)).toBeCloseTo(10, 1);
+    expect(kW(s.triage.alloc.habitat)).toBeCloseTo(9, 1);
+    expect(kW(s.triage.alloc.comms)).toBeCloseTo(5, 1);
+    expect(s.pipeTemp).toBeGreaterThan(FREEZE_K + 15);
+    const det = detect(s);
+    expect(det?.wing).toBe(0);
+    expect(det!.confidence).toBeGreaterThanOrEqual(85);
+    // The faulted net cannot be re-engaged.
+    e.setNet(true);
+    expect(e.snapshot().netOn).toBe(false);
+  });
+
+  it('emergency backup EDS recovers the wing and restores the drills', () => {
+    const e = new PhysicsEngine();
+    e.applyScenario(4);
+    run(e, 30, true);
+    e.engageProtection();
+    const s = run(e, 30, true);
+    expect(s.netFault).toBe(true);
+    expect(s.dust[0]).toBeLessThanOrEqual(0.021);
+    expect(s.throttled).toBe(false);
+    expect(s.triage.failsafe).toBe(false);
+    expect(kW(s.triage.alloc.drills)).toBeCloseTo(16, 0);
+    expect(s.coreTemp).toBeLessThan(420);
+  }, 30_000);
+});
+
+describe('radiation model (kept for Q&A, hidden from the pitch view)', () => {
+  it('default siting keeps the habitat below 5 rem/yr; turning the shield away breaches it', () => {
+    const e = new PhysicsEngine();
+    expect(e.snapshot().radiation.habitat.secure).toBe(true);
+    e.setShield(225);
+    e.step(0.1);
+    expect(e.snapshot().radiation.habitat.secure).toBe(false);
     e.autoOptimize();
     e.step(0.1);
-    s = e.snapshot();
-    expect(s.radiation.habitat.secure).toBe(true);
+    expect(e.snapshot().radiation.habitat.secure).toBe(true);
   });
 });

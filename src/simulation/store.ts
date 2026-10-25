@@ -46,13 +46,12 @@ export function useSim(): SimSnapshot {
 
 // --- UI-only view state (not physics) ---------------------------------------
 export interface ViewState {
-  showCones: boolean;
   showLabels: boolean;
   cameraPreset: 'orbit' | 'top' | 'habitat' | 'reactor';
   presetNonce: number;
 }
 
-let view: ViewState = { showCones: true, showLabels: true, cameraPreset: 'orbit', presetNonce: 0 };
+let view: ViewState = { showLabels: true, cameraPreset: 'orbit', presetNonce: 0 };
 const viewListeners = new Set<Listener>();
 
 export function setView(patch: Partial<ViewState>) {

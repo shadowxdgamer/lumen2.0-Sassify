@@ -9,33 +9,35 @@ const ROWS = [
   { key: 'life', label: 'LIFE SUPPORT', color: '#f97316' },
   { key: 'comms', label: 'COMMS', color: '#eab308' },
   { key: 'habitat', label: 'HABITAT', color: '#22c55e' },
-  { key: 'science', label: 'SCIENCE', color: '#3b82f6' },
+  { key: 'drills', label: 'ICE DRILLS', color: '#3b82f6' },
 ] as const;
 
 const OVERRIDES: { key: keyof TriageRequest; label: string; color: string }[] = [
   { key: 'life', label: 'LIFE', color: '#f97316' },
   { key: 'comms', label: 'COMMS', color: '#eab308' },
-  { key: 'science', label: 'SCIENCE', color: '#3b82f6' },
+  { key: 'drills', label: 'ICE DRILLS', color: '#3b82f6' },
 ];
 
 export function PowerTriagePanel() {
   const s = useSim();
   const [open, setOpen] = useState(false);
   const { alloc, demand } = s.triage;
-  const total = alloc.life + alloc.comms + alloc.habitat + alloc.science;
+  const total = alloc.life + alloc.comms + alloc.habitat + alloc.drills;
   const margin = s.pipeTemp - FREEZE_K;
   return (
     <Panel
       title="SURVIVAL POWER TRIAGE"
       className="shrink-0"
-      right={<span className={`font-mono text-[11px] ${s.triageAuto ? 'text-cyan-300' : 'text-slate-500'}`}>{s.triageAuto ? 'AUTO PRIORITY' : 'PROPORTIONAL'}</span>}
+      right={
+        <span className={`font-mono text-[11px] ${s.triage.failsafe ? 'blink font-semibold text-red-400' : 'text-cyan-300'}`}>{s.triage.failsafe ? 'FAILSAFE PRIORITY' : 'PRIORITY'}</span>
+      }
     >
       <div className="px-[12px] py-[8px]">
         <div className="mb-[8px] flex items-baseline justify-between font-mono text-[11px] text-slate-400">
           <span>
             <span className="text-[15px] text-cyan-300 tnum">{(s.pe / 1000).toFixed(1)}</span> kWe AVAILABLE · {(total / 1000).toFixed(1)} USED
           </span>
-          <span className={s.triage.brownout ? 'blink font-semibold text-red-400' : 'text-emerald-300'}>{s.triage.brownout ? 'LIFE SUPPORT LOW' : 'LIFE SUPPORT OK'}</span>
+          <span className={s.triage.failsafe ? 'text-amber-300' : 'text-emerald-300'}>{s.triage.failsafe ? 'DRILLS SHED · CREW 100%' : 'CREW LOADS 100%'}</span>
         </div>
         <div className="space-y-[6px]">
           {ROWS.map(({ key, label, color }) => (
@@ -52,7 +54,7 @@ export function PowerTriagePanel() {
         </div>
         <div className="mt-[8px] flex items-center justify-between border-t border-edge/70 pt-[6px] font-mono text-[11px] text-slate-400">
           <span>
-            WATER LINE {s.pipeTemp.toFixed(1)}K · HEATER {s.heaterOn ? <span className="text-amber-300">ON</span> : 'OFF'}
+            WATER LINE {s.pipeTemp.toFixed(1)}K · HEATERS {(s.triage.heaterPower / 1000).toFixed(1)} kW
           </span>
           <span className={margin < 3 ? 'blink font-semibold text-red-400' : 'text-emerald-300'}>+{margin.toFixed(1)}K ABOVE FREEZE</span>
         </div>
@@ -91,13 +93,6 @@ export function PowerTriagePanel() {
                 </div>
               );
             })}
-            <button
-              onClick={() => command((e) => e.setTriageAuto(!s.triageAuto))}
-              className="w-full border py-[3px] font-mono text-[11px] transition-[border-color,color] duration-150 ease-out"
-              style={{ borderColor: s.triageAuto ? '#22d3ee' : '#334155', color: s.triageAuto ? '#67e8f9' : '#94a3b8' }}
-            >
-              AUTO PRIORITY TRIAGE: {s.triageAuto ? 'ON' : 'OFF'}
-            </button>
           </div>
         )}
       </div>

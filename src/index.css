@@ -88,12 +88,20 @@ input[type="range"].hud-range::-moz-range-thumb {
 .engage-wrap {
   filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.75)) drop-shadow(0 0 26px rgba(14, 165, 233, 0.45));
 }
+/* Emergency variant (shield malfunction): same shape, alarm colours. */
+.engage-btn--alert {
+  background: radial-gradient(120% 140% at 50% 50%, #f97316 0%, #b91c1c 50%, #450a0a 100%);
+  box-shadow: inset 0 0 22px rgba(254, 215, 170, 0.6), inset 0 0 2px #fed7aa;
+}
+.engage-wrap--alert {
+  filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.8)) drop-shadow(0 0 26px rgba(220, 38, 38, 0.5));
+}
 /* Motion only for users who have not asked to reduce it; colour cues remain either way. */
 @media (prefers-reduced-motion: no-preference) {
   .engage-btn:not(:disabled):active {
     scale: 0.96;
   }
-  .engage-wrap {
+  .engage-wrap:not(.engage-wrap--alert) {
     animation: engage-pulse 2.2s ease-in-out infinite;
   }
   .blink {
@@ -149,6 +157,11 @@ input[type="range"].hud-range::-moz-range-thumb {
   color: #ff7b6b;
   border-color: rgba(255, 80, 60, 0.85);
   box-shadow: 0 0 14px rgba(255, 60, 40, 0.35);
+}
+.hud-amber {
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.75);
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.25);
 }
 .hud-cyan {
   color: #a5f3fc;

@@ -1,4 +1,4 @@
-import { Crosshair, Grid3x3, House, Move3d, Radiation, ShieldHalf, Tags, Wand2 } from 'lucide-react';
+import { Crosshair, Grid3x3, House, Move3d, ShieldHalf, Tags } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { SceneController, type HudState } from '../scene/SceneController';
 import { command, getView, setView, useSim, useView } from '../simulation/store';
@@ -61,7 +61,7 @@ export function Viewport3D() {
         </g>
       </svg>
 
-      {/* Toolbar: cameras | layers | siting */}
+      {/* Toolbar: cameras | layers */}
       <div className="absolute left-1/2 top-[18px] flex -translate-x-1/2 items-center gap-[8px]">
         <ToolButton title="Orbit view" active={view.cameraPreset === 'orbit'} onClick={() => preset('orbit')}>
           <Move3d {...ICON} />
@@ -76,45 +76,14 @@ export function Viewport3D() {
           <House {...ICON} />
         </ToolButton>
         <span className="mx-[4px] h-[24px] w-px bg-slate-700" />
-        <ToolButton title="Toggle electrostatic mesh net" active={s.netOn} onClick={() => command((e) => e.setNet(!s.netOn))}>
+        <ToolButton title={s.netFault ? 'Mesh net offline (fault)' : 'Toggle electrostatic mesh net'} active={s.netOn} onClick={() => command((e) => e.setNet(!s.netOn))}>
           <ShieldHalf {...ICON} />
-        </ToolButton>
-        <ToolButton title="Toggle radiation cones" active={view.showCones} onClick={() => setView({ showCones: !view.showCones })}>
-          <Radiation {...ICON} />
         </ToolButton>
         <ToolButton title="Toggle 3D callouts" active={view.showLabels} onClick={() => setView({ showLabels: !view.showLabels })}>
           <Tags {...ICON} />
         </ToolButton>
-        <span className="mx-[4px] h-[24px] w-px bg-slate-700" />
-        <button
-          onClick={() => command((e) => e.autoOptimize())}
-          className={`flex h-[36px] items-center gap-[6px] border border-emerald-400/70 bg-emerald-500/10 px-[12px] text-[13px] tracking-wide text-emerald-200 hover:bg-emerald-500/25 ${PRESS}`}
-        >
-          <Wand2 size={16} strokeWidth={1.75} /> AUTO-OPTIMIZE SITING
-        </button>
       </div>
 
-      {/* Shield azimuth control */}
-      <div className="absolute left-1/2 top-[64px] flex -translate-x-1/2 items-center gap-[10px] border border-edge bg-[#0b141e]/85 px-[12px] py-[4px] font-mono text-[11px]">
-        <label htmlFor="shield-az" className="text-slate-400">
-          B4C SHIELD θ
-        </label>
-        <input
-          id="shield-az"
-          type="range"
-          min={0}
-          max={359}
-          value={Math.round(s.shieldAz)}
-          onChange={(ev) => command((e) => e.setShield(Number(ev.target.value)))}
-          className="hud-range w-[220px]"
-          style={{ ['--pct' as string]: `${(s.shieldAz / 359) * 100}%`, ['--fill' as string]: '#facc15' }}
-        />
-        <span className="w-[36px] text-right text-amber-300 tnum">{s.shieldAz.toFixed(0)}°</span>
-      </div>
-
-      <div className="pointer-events-none absolute bottom-[12px] left-[14px] font-mono text-[11px] tracking-wide text-slate-500">
-        DRAG REACTOR TO MOVE · SHIFT+DRAG TO AIM SHIELD
-      </div>
     </Panel>
   );
 }

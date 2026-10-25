@@ -103,17 +103,16 @@ export class DustSystem {
   }
 
   /**
-   * @param netLevel 0..1 deployment of the net (deflection only when fully up)
+   * @param deflecting whether the net is up and powered (deflects 85 % of strikes)
    * @param plume whether lander ejecta is inbound
    */
-  update(dt: number, center: THREE.Vector3, netLevel: number, plume: boolean) {
+  update(dt: number, center: THREE.Vector3, deflecting: boolean, plume: boolean) {
     const rate = plume ? 420 : 55;
     this.spawnAcc += rate * dt;
     while (this.spawnAcc >= 1) {
       this.spawn(center, plume);
       this.spawnAcc -= 1;
     }
-    const netUp = netLevel > 0.95;
     const tmp = new THREE.Vector3();
     for (let i = 0; i < MAX_DUST; i++) {
       if (!this.alive[i]) continue;
@@ -128,7 +127,7 @@ export class DustSystem {
       const nz = pz + this.vel[o + 2] * dt;
       const d1 = Math.hypot(nx - center.x, ny - center.y, nz - center.z);
       this.age[i] += dt;
-      if (netUp && d0 >= NET_RADIUS && d1 < NET_RADIUS && ny > center.y && this.rand() < NET_DEFLECTION) {
+      if (deflecting && d0 >= NET_RADIUS && d1 < NET_RADIUS && ny > center.y && this.rand() < NET_DEFLECTION) {
         // Reflect off the charged mesh and spark.
         tmp.set(nx - center.x, ny - center.y, nz - center.z).normalize();
         const vn = this.vel[o] * tmp.x + this.vel[o + 1] * tmp.y + this.vel[o + 2] * tmp.z;
