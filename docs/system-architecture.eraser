@@ -1,0 +1,54 @@
+// ==============================================================================
+// HELIOSCORE 2030 — Global System Architecture (Simple & High-Level)
+// IEEE Lumen 2.0 "Beyond 2030" Hackathon
+// ==============================================================================
+
+direction right
+
+// ------------------------------------------------------------------------------
+// 1. OPERATOR MISSION CONTROL (Client Presentation Layer)
+// ------------------------------------------------------------------------------
+Operator_Dashboard [color: cyan, icon: monitor, label: "1. Operator Mission Control (Browser Native)"] {
+  UI_Telemetry [icon: activity, label: "Live Telemetry Gauges (Core Temp, Emissivity, Power)"]
+  Viewport_3D [icon: globe, label: "Interactive 3D Crater Viewport (Three.js 60 FPS)"]
+  Control_Inputs [icon: sliders, label: "Scenario Controller [1-4] & Survival Triage Sliders"]
+}
+
+// ------------------------------------------------------------------------------
+// 2. COUPLED DIGITAL TWIN ENGINE (Core Simulation Layer)
+// ------------------------------------------------------------------------------
+Digital_Twin_Engine [color: purple, icon: cpu, label: "2. Coupled Digital Twin Engine (10 Hz ODEs)"] {
+  Physics_Solver [icon: flame, label: "Thermal Network & Stefan-Boltzmann Radiation"]
+  Power_Management [icon: gauge, label: "Stirling Converter Throttle & Derating (40 -> 24.5 kWe)"]
+  Microgrid_Triage [icon: layers, label: "Survival Microgrid Triage (Crew Life Support Floor)"]
+}
+
+// ------------------------------------------------------------------------------
+// 3. THERMAL AI VISION SUBSYSTEM (Autonomous Perception Layer)
+// ------------------------------------------------------------------------------
+Thermal_AI_Vision [color: green, icon: camera, label: "3. Thermal AI Vision (Classical CV)"] {
+  LWIR_Camera [icon: eye, label: "Synthetic Mast-Cam Thermal Stream (Ironbow 40K-920K)"]
+  Anomaly_Detector [icon: search, label: "Autonomous Hot-Wing Lock & Dust Inversion"]
+}
+
+// ------------------------------------------------------------------------------
+// 4. LUNAR SURFACE PLANT & DEFENSE (Physical Lunar Assets)
+// ------------------------------------------------------------------------------
+Lunar_Surface_Plant [color: orange, icon: moon, label: "4. Lunar Surface Assets & Defense Hardware"] {
+  Fission_Reactor [icon: zap, label: "40 kWe Fission Reactor & 4 Deployable Radiator Wings"]
+  Defense_Systems [icon: shield, label: "Electrostatic Mesh Net & Targeted 3-Phase EDS"]
+  Habitat_Mining [icon: home, label: "Artemis Habitat Base & ISRU Ice-Mining Drills"]
+}
+
+// ------------------------------------------------------------------------------
+// GLOBAL HIGH-LEVEL DATA FLOW (Clean 6-Step Closed Loop)
+// ------------------------------------------------------------------------------
+
+Operator_Dashboard -> Digital_Twin_Engine [label: "1. Commands & Scenarios"]
+Digital_Twin_Engine -> Operator_Dashboard [label: "2. Live 10 Hz Telemetry & 3D Render"]
+
+Digital_Twin_Engine -> Thermal_AI_Vision [label: "3. Synthetic Heat Radiance"]
+Thermal_AI_Vision -> Digital_Twin_Engine [label: "4. Target Wing Lock & Dust %"]
+
+Digital_Twin_Engine -> Lunar_Surface_Plant [label: "5. Autonomous Net & EDS Actuation"]
+Lunar_Surface_Plant -> Digital_Twin_Engine [label: "6. Regolith Dust Plume & Physical State"]
