@@ -4,7 +4,11 @@ Autonomous lunar nuclear-fission digital twin with electrostatic dust defense an
 
 It is 100% browser-native: Vite + React 19 + TypeScript + Tailwind v4 + Three.js. There is no backend and no external assets; every mesh and texture is procedural, and every number on screen comes from a live 10 Hz coupled physics loop.
 
-The full engineering and pitch-defense spec is in [`.plans/helioscore-2030-spec.md`](.plans/helioscore-2030-spec.md).
+The full engineering and pitch-defense spec is in [`.plans/helioscore-2030-spec.md`](.plans/helioscore-2030-spec.md). Plain-language material for the pitch:
+
+- [`docs/user-guide.md`](docs/user-guide.md): screen tour, the four scenarios, and a glossary
+- [`docs/pitch-deck-prompt.md`](docs/pitch-deck-prompt.md): a ready-to-paste prompt for generating the slide deck
+- [`docs/pitch-qa.md`](docs/pitch-qa.md): simple jury Q&A with no maths
 
 ## Run
 
